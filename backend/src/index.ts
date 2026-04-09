@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { authRouter } from './routes/auth.routes';
+import { otpRouter } from './routes/otp.routes';
+import { leafRouter } from './routes/leaf.routes';
 import { scansRouter } from './routes/scans.routes';
 import { alertsRouter } from './routes/alerts.routes';
 import { notificationsRouter } from './routes/notifications.routes';
@@ -81,6 +83,8 @@ app.get('/api/v1/health', (_req, res) => res.json({ status: 'ok', timestamp: new
 
 // API routes
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/otp', otpRouter);
+app.use('/api/v1/leaf', leafRouter);
 app.use('/api/v1/scans', scansRouter);
 app.use('/api/v1/alerts', alertsRouter);
 app.use('/api/v1/notifications', notificationsRouter);

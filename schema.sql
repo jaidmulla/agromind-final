@@ -332,3 +332,16 @@ CREATE INDEX IF NOT EXISTS idx_notification_logs_created_at ON notification_logs
 CREATE INDEX IF NOT EXISTS idx_notification_logs_status ON notification_logs(status);
 CREATE INDEX IF NOT EXISTS idx_weather_snapshots_user_id ON weather_snapshots(user_id);
 CREATE INDEX IF NOT EXISTS idx_weather_snapshots_created_at ON weather_snapshots(created_at DESC);
+
+-- ── OTP Authentication Extension ──────────────────────────────────────────────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS village VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS language_code VARCHAR(10) DEFAULT 'en';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_hash VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_attempts INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_blocked_until TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT false;
+
+-- Create unique index on phone for OTP authentication
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone) WHERE phone IS NOT NULL;
+

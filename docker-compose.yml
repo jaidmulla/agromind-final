@@ -19,6 +19,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Redis Cache ──────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: agromind-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Node.js Backend ──────────────────────────────────────────────────────
   backend:
     build:
@@ -38,6 +54,7 @@ services:
       DB_SSL: ${DB_SSL:-false}
       JWT_SECRET: ${JWT_SECRET:-change_me_to_a_very_long_random_secret_in_production}
       JWT_EXPIRES_IN: 7d
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-gpt-4o-mini}
@@ -54,6 +71,8 @@ services:
       - "3001:3001"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       ml-service:
         condition: service_started
@@ -112,6 +131,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   uploads_data:
   backend_logs:
   ml_models:
