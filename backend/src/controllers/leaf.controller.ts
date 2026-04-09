@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { query } from '../utils/database';
 import plantid from '../integrations/plantid';
-import claude from '../integrations/claude';
+import claude, { type TreatmentResponse } from '../integrations/claude';
 import logger from '../utils/logger';
 import crypto from 'crypto';
 
@@ -82,7 +82,7 @@ export const analyze = async (req: Request, res: Response) => {
     }
 
     // Step 3: Generate dynamic treatment steps using Claude
-    let treatmentResponse: { success: boolean; content?: string } = { success: true, content: '' };
+    let treatmentResponse: TreatmentResponse = { success: true, content: '' };
 
     if (disease_name !== 'Healthy') {
       treatmentResponse = await claude.generateTreatmentSteps(
