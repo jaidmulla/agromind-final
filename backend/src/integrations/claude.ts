@@ -50,7 +50,11 @@ export const generateTreatmentSteps = async (
     const prompt = buildPrompt(plantName, diseaseName, cause, probability, language);
 
     // Call Claude API
-    const message = await client.messages.create({
+    const claudeApi = getClaudeClient();
+    if (!claudeApi) {
+      return generateFallbackTreatment(plantName, diseaseName, language);
+    }
+    const message = await (claudeApi as any).beta.messages.create({
       model: 'claude-3-5-sonnet-20241022', // Use latest Claude model
       max_tokens: 1024,
       messages: [

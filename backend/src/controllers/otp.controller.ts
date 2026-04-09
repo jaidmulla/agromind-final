@@ -218,7 +218,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
  */
 export const getOTPStatus = async (req: Request, res: Response) => {
   try {
-    const { phone } = req.params;
+    const phone = String(req.params.phone || '');
 
     if (!phone || !/^\d{10}$/.test(phone)) {
       return res.status(400).json({

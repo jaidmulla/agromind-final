@@ -265,6 +265,59 @@ const SQL_STATEMENTS = [
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`,
 
+  `CREATE TABLE IF NOT EXISTS chat_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_message TEXT NOT NULL,
+    assistant_reply TEXT NOT NULL,
+    language VARCHAR(10) DEFAULT 'en' CHECK (language IN ('en','hi','mr')),
+    context_snapshot JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`,
+
+  // Drop old simple tasks table and create AI Doctor tasks
+  `CREATE TABLE IF NOT EXISTS ai_doctor_tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+    day INTEGER NOT NULL DEFAULT 1,
+    task_title VARCHAR(255) NOT NULL,
+    task_description TEXT NOT NULL,
+    product_name VARCHAR(255),
+    quantity VARCHAR(100),
+    unit VARCHAR(50),
+    cost_inr DECIMAL(10,2) DEFAULT 0,
+    priority VARCHAR(50) NOT NULL CHECK (priority IN ('urgent', 'recommended', 'optional')),
+    urgency_level VARCHAR(50) NOT NULL CHECK (urgency_level IN ('high', 'medium', 'low')),
+    reason TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'skipped')),
+    completed_at TIMESTAMPTZ,
+    disease_name VARCHAR(255),
+    disease_severity VARCHAR(20),
+    weather_context JSONB DEFAULT '{}',
+    community_context TEXT,
+    language VARCHAR(10) DEFAULT 'en' CHECK (language IN ('en', 'hi', 'mr')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS ai_doctor_recommendations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+    summary TEXT NOT NULL,
+    crop_name VARCHAR(255),
+    disease_name VARCHAR(255),
+    severity VARCHAR(20),
+    total_cost_inr DECIMAL(12,2),
+    deadline_hours INTEGER,
+    urgency VARCHAR(50),
+    notes TEXT,
+    language VARCHAR(10) DEFAULT 'en',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '7 days'
+  )`,
+
   // Indexes
   `CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans(created_at DESC)`,
@@ -288,6 +341,14 @@ const SQL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_notification_logs_status ON notification_logs(status)`,
   `CREATE INDEX IF NOT EXISTS idx_weather_snapshots_user_id ON weather_snapshots(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_weather_snapshots_created_at ON weather_snapshots(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON chat_history(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_tasks_user_scan ON ai_doctor_tasks(user_id, scan_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_tasks_status ON ai_doctor_tasks(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_tasks_priority ON ai_doctor_tasks(priority)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_tasks_created ON ai_doctor_tasks(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_recommendations_scan ON ai_doctor_recommendations(scan_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_recommendations_user ON ai_doctor_recommendations(user_id, created_at DESC)`,
 
   // Updated_at trigger
   `CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -296,7 +357,7 @@ const SQL_STATEMENTS = [
    $$ language 'plpgsql'`,
 
   ...[
-    'users','farms','crops','scans','alerts','community_posts','tasks','schemes','notification_preferences'
+    'users','farms','crops','scans','alerts','community_posts','tasks','schemes','notification_preferences','ai_doctor_tasks'
   ].map(t => `DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_${t}_updated_at') THEN
       CREATE TRIGGER update_${t}_updated_at BEFORE UPDATE ON ${t}

@@ -82,7 +82,7 @@ export const analyze = async (req: Request, res: Response) => {
     }
 
     // Step 3: Generate dynamic treatment steps using Claude
-    let treatmentResponse = { success: true, content: '' };
+    let treatmentResponse: { success: boolean; content?: string } = { success: true, content: '' };
 
     if (disease_name !== 'Healthy') {
       treatmentResponse = await claude.generateTreatmentSteps(
