@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { Beta } from '@anthropic-ai/sdk/resources/beta/beta';
 import logger from '../utils/logger';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -54,7 +55,8 @@ export const generateTreatmentSteps = async (
     if (!claudeApi) {
       return generateFallbackTreatment(plantName, diseaseName, language);
     }
-    const message = await (claudeApi as any).beta.messages.create({
+    const betaApi: Beta = claudeApi.beta;
+    const message = await betaApi.messages.create({
       model: 'claude-3-5-sonnet-20241022', // Use latest Claude model
       max_tokens: 1024,
       messages: [
