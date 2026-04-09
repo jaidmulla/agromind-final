@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { authenticate } from '../middleware/auth';
+import { upload } from '../middleware/upload';
+import { createScan, getScans, getScanById, resolveScan, deleteScan, getScanRegretTimeline } from '../controllers/scans.controller';
+export const scansRouter = Router();
+scansRouter.use(authenticate);
+scansRouter.post('/', upload.single('image'), createScan);
+scansRouter.get('/', getScans);
+scansRouter.get('/:id', getScanById);
+scansRouter.get('/:id/regret-timeline', getScanRegretTimeline);
+scansRouter.put('/:id/resolve', resolveScan);
+scansRouter.delete('/:id', deleteScan);

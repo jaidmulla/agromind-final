@@ -1,0 +1,21 @@
+services:
+  # Development override for backend - mounts source code
+  backend:
+    volumes:
+      - ./backend/src:/app/src:ro  # Mount source code (read-only in container)
+      - ./backend/dist:/app/dist   # Keep built files for running
+      - uploads_data:/app/uploads
+      - backend_logs:/app/logs
+
+  # Development override for frontend - mounts source code  
+  frontend:
+    volumes:
+      - ./frontend/src:/app/src:ro  # Mount source code (read-only in container)
+      - ./frontend/dist:/app/dist:ro # Mount built files
+      - ./frontend/public:/app/public:ro
+
+  # Development override for ML service
+  ml-service:
+    volumes:
+      - ./ml-service:/app:ro  # Mount Python code
+      - ml_models:/app/models

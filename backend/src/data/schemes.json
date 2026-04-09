@@ -1,0 +1,231 @@
+[
+  {
+    "id": "pmfby",
+    "name": "Pradhan Mantri Fasal Bima Yojana (PMFBY)",
+    "category": "insurance",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "Comprehensive crop insurance scheme covering all stages of crop cycle including post-harvest losses.",
+    "benefits": [
+      "Up to \u20b92 lakh insurance coverage per farmer",
+      "Premium as low as 1.5% for Rabi crops, 2% for Kharif crops",
+      "Covers drought, flood, cyclone, hailstorm, landslide, pest/disease",
+      "Post-harvest losses covered for 14 days"
+    ],
+    "eligibility": "All farmers (loanee and non-loanee) growing notified crops in notified areas",
+    "how_to_apply": "Apply at nearest bank branch, CSC center, or online at pmfby.gov.in",
+    "deadline": "Before crop season (Kharif: July 31, Rabi: December 31)",
+    "website": "https://pmfby.gov.in",
+    "applicable_crops": ["wheat", "rice", "cotton", "sugarcane", "potato", "tomato", "onion", "all"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 98,
+    "max_amount_inr": 200000
+  },
+  {
+    "id": "pkvy",
+    "name": "Paramparagat Krishi Vikas Yojana (PKVY)",
+    "category": "subsidy",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "Promotes organic farming through cluster approach. Financial assistance for 3-year organic conversion.",
+    "benefits": [
+      "\u20b950,000 per hectare over 3 years for organic farming",
+      "\u20b931,000 for on-farm inputs, packaging, transportation",
+      "\u20b98,800 for certification",
+      "Market linkage support"
+    ],
+    "eligibility": "Farmers willing to adopt organic farming; minimum cluster of 50 acres",
+    "how_to_apply": "Contact district agriculture office or state organic mission",
+    "deadline": "Rolling enrollment",
+    "website": "https://pgsindia-ncof.gov.in",
+    "applicable_crops": ["all"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 100,
+    "max_amount_inr": 50000
+  },
+  {
+    "id": "pm-kisan",
+    "name": "PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)",
+    "category": "income_support",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "Direct income support of \u20b96,000 per year to all eligible farmer families.",
+    "benefits": [
+      "\u20b96,000 per year in 3 equal instalments of \u20b92,000",
+      "Direct bank transfer to farmer account",
+      "No intermediary \u2014 100% direct benefit"
+    ],
+    "eligibility": "All small and marginal farmer families with cultivable land",
+    "how_to_apply": "Apply at pmkisan.gov.in or nearest CSC/bank",
+    "deadline": "Ongoing enrollment",
+    "website": "https://pmkisan.gov.in",
+    "applicable_crops": ["all"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 0,
+    "max_amount_inr": 6000
+  },
+  {
+    "id": "rkvy",
+    "name": "Rashtriya Krishi Vikas Yojana (RKVY)",
+    "category": "infrastructure",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "Scheme for holistic development of agriculture including infrastructure, technology, and market linkages.",
+    "benefits": [
+      "Subsidy for farm machinery and equipment (up to 50%)",
+      "Support for cold storage, processing units",
+      "Irrigation infrastructure grants",
+      "Agri-business incubation support"
+    ],
+    "eligibility": "Individual farmers, FPOs, cooperatives, state governments",
+    "how_to_apply": "Apply through state agriculture department",
+    "deadline": "Annual budget cycle \u2014 apply before March",
+    "website": "https://rkvy.nic.in",
+    "applicable_crops": ["all"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 50,
+    "max_amount_inr": 500000
+  },
+  {
+    "id": "nfsm",
+    "name": "National Food Security Mission (NFSM)",
+    "category": "subsidy",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "Enhancing production of rice, wheat, pulses, coarse cereals and commercial crops through area expansion and productivity enhancement.",
+    "benefits": [
+      "Subsidized seeds (\u20b950/kg for certified seed)",
+      "Subsidy on micronutrients and soil amendments",
+      "Plant protection equipment at 50% cost",
+      "Training and demonstration support"
+    ],
+    "eligibility": "Farmers in NFSM districts growing target crops",
+    "how_to_apply": "Apply at block-level agriculture office",
+    "deadline": "Before crop season",
+    "website": "https://nfsm.gov.in",
+    "applicable_crops": ["wheat", "rice", "pulses", "corn", "cotton"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 50,
+    "max_amount_inr": 15000
+  },
+  {
+    "id": "midh",
+    "name": "Mission for Integrated Development of Horticulture (MIDH)",
+    "category": "subsidy",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "Support for development of horticulture including fruits, vegetables, spices, and flowers.",
+    "benefits": [
+      "20\u201350% subsidy on planting material",
+      "Support for drip/sprinkler irrigation (40\u201355%)",
+      "Pack house, cold storage subsidies",
+      "Plastic mulching subsidy (50%)"
+    ],
+    "eligibility": "Horticulture farmers; priority to small/marginal farmers",
+    "how_to_apply": "Apply at district horticulture office",
+    "deadline": "Rolling \u2014 apply at district office",
+    "website": "https://midh.gov.in",
+    "applicable_crops": ["tomato", "onion", "potato", "grape", "apple", "strawberry", "pepper"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 50,
+    "max_amount_inr": 200000
+  },
+  {
+    "id": "nmoop",
+    "name": "National Mission on Oilseeds and Oil Palm (NMOOP)",
+    "category": "subsidy",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "Scheme to increase production of oilseeds and expand oil palm cultivation.",
+    "benefits": [
+      "Seed mini-kit distribution free of cost",
+      "IPM/INM support at 50% cost",
+      "Sprinkler/drip irrigation subsidy"
+    ],
+    "eligibility": "Farmers in NMOOP districts growing oilseeds or oil palm",
+    "how_to_apply": "Apply at district agriculture office",
+    "deadline": "Before crop sowing",
+    "website": "https://nmoop.gov.in",
+    "applicable_crops": ["soybean", "sunflower", "groundnut"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 50,
+    "max_amount_inr": 20000
+  },
+  {
+    "id": "kcc",
+    "name": "Kisan Credit Card (KCC)",
+    "category": "credit",
+    "ministry": "Ministry of Finance / Ministry of Agriculture",
+    "description": "Short-term credit for agricultural needs at concessional interest rates.",
+    "benefits": [
+      "Credit limit based on land holding and crop pattern",
+      "Interest rate as low as 4% per annum (with subvention)",
+      "Covers crop cultivation, maintenance, and harvest expenses",
+      "Personal accident insurance of \u20b950,000 included"
+    ],
+    "eligibility": "All farmers \u2014 owner cultivators, tenant farmers, sharecroppers, SHGs",
+    "how_to_apply": "Apply at any commercial bank, RRB, or cooperative bank",
+    "deadline": "Ongoing \u2014 apply anytime",
+    "website": "https://www.nabard.org",
+    "applicable_crops": ["all"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 0,
+    "max_amount_inr": 300000
+  },
+  {
+    "id": "mgnrega-agri",
+    "name": "MGNREGA Agricultural Works",
+    "category": "employment",
+    "ministry": "Ministry of Rural Development",
+    "description": "Employment guarantee for agricultural works like land development, water harvesting, and farm ponds.",
+    "benefits": [
+      "100 days guaranteed employment at minimum wages",
+      "Farm pond construction support",
+      "Land leveling and development",
+      "Horticulture plantation support"
+    ],
+    "eligibility": "Rural household members willing to do unskilled manual work",
+    "how_to_apply": "Register at gram panchayat office",
+    "deadline": "Ongoing",
+    "website": "https://nrega.nic.in",
+    "applicable_crops": ["all"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 100,
+    "max_amount_inr": 0
+  },
+  {
+    "id": "maharashtra-drip",
+    "name": "Maharashtra Drip Irrigation Subsidy (MH)",
+    "category": "subsidy",
+    "ministry": "Maharashtra Agriculture Department",
+    "description": "Maharashtra state scheme for drip and sprinkler irrigation with high subsidy.",
+    "benefits": [
+      "Up to 80% subsidy on drip irrigation for small farmers",
+      "65% for medium farmers",
+      "55% for large farmers",
+      "Covers pipes, emitters, filters, and control heads"
+    ],
+    "eligibility": "Maharashtra farmers with agricultural land and water source",
+    "how_to_apply": "Apply at district agriculture office or online at mahapocra.gov.in",
+    "deadline": "Annual \u2014 apply before June 30",
+    "website": "https://mahapocra.gov.in",
+    "applicable_crops": ["all"],
+    "applicable_states": ["Maharashtra"],
+    "subsidy_pct": 80,
+    "max_amount_inr": 150000
+  },
+  {
+    "id": "atma",
+    "name": "Agricultural Technology Management Agency (ATMA)",
+    "category": "training",
+    "ministry": "Ministry of Agriculture & Farmers Welfare",
+    "description": "District-level agency for agricultural extension, training, and technology transfer to farmers.",
+    "benefits": [
+      "Free training on modern farming techniques",
+      "Demonstration plots on best practices",
+      "Exposure visits to progressive farmers",
+      "Kisan melas and technology festivals"
+    ],
+    "eligibility": "All farmers in ATMA districts",
+    "how_to_apply": "Contact block technology team at block agriculture office",
+    "deadline": "Ongoing",
+    "website": "https://atma-india.net",
+    "applicable_crops": ["all"],
+    "applicable_states": ["all"],
+    "subsidy_pct": 100,
+    "max_amount_inr": 0
+  }
+]

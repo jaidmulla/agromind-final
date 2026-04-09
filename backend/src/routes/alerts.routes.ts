@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { authenticate } from '../middleware/auth';
+import { getAlerts, getAlertStats, markAlertRead, resolveAlert, getNearbyAlerts, deleteAlert, getAlertsHeatmap } from '../controllers/alerts.controller';
+export const alertsRouter = Router();
+alertsRouter.use(authenticate);
+alertsRouter.get('/', getAlerts);
+alertsRouter.get('/stats', getAlertStats);
+alertsRouter.get('/nearby', getNearbyAlerts);
+alertsRouter.get('/heatmap', getAlertsHeatmap);
+alertsRouter.put('/:id/read', markAlertRead);
+alertsRouter.put('/:id/resolve', resolveAlert);
+alertsRouter.delete('/:id', deleteAlert);

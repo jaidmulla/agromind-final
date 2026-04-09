@@ -1,0 +1,81 @@
+{
+  "tomato": {
+    "fertilizers": [
+      { "name": "DAP (18-46-0)", "dose": "50 kg/acre", "timing": "At transplanting", "price_per_kg": 27 },
+      { "name": "Urea", "dose": "30 kg/acre", "timing": "30 days after transplanting", "price_per_kg": 7 },
+      { "name": "Potassium Sulphate (SOP)", "dose": "25 kg/acre", "timing": "At fruit set", "price_per_kg": 55 },
+      { "name": "Calcium Nitrate", "dose": "5 kg/acre foliar", "timing": "Weekly during fruiting", "price_per_kg": 32 }
+    ],
+    "pesticides": [
+      { "name": "Copper Oxychloride 50% WP", "dose": "2.5g/litre", "timing": "Preventive every 10 days", "price_per_litre": 320, "organic": false },
+      { "name": "Mancozeb 75% WP", "dose": "2g/litre", "timing": "At disease onset", "price_per_litre": 280, "organic": false },
+      { "name": "Neem Oil 3000 ppm", "dose": "5ml/litre", "timing": "Every 7 days preventive", "price_per_litre": 150, "organic": true },
+      { "name": "Imidacloprid 17.8 SL", "dose": "0.5ml/litre", "timing": "For whitefly/aphids", "price_per_litre": 550, "organic": false }
+    ],
+    "best_practices": [
+      "Maintain 60×45 cm spacing for air circulation",
+      "Install drip irrigation — reduces foliar disease by 40%",
+      "Stake plants at 30 days to prevent lodging",
+      "Remove suckers weekly; monitor for TYLCV whitefly weekly",
+      "Apply mulch to prevent soil splash disease spread"
+    ]
+  },
+  "potato": {
+    "fertilizers": [
+      { "name": "NPK 20-20-0", "dose": "75 kg/acre", "timing": "At planting", "price_per_kg": 22 },
+      { "name": "Muriate of Potash (MOP)", "dose": "50 kg/acre", "timing": "At planting", "price_per_kg": 18 },
+      { "name": "Urea", "dose": "40 kg/acre", "timing": "30 days after emergence", "price_per_kg": 7 },
+      { "name": "Boron Foliar", "dose": "1g/litre", "timing": "At tuber initiation", "price_per_kg": 180 }
+    ],
+    "pesticides": [
+      { "name": "Metalaxyl-M + Mancozeb", "dose": "2.5g/litre", "timing": "Every 7 days in wet weather", "price_per_litre": 420, "organic": false },
+      { "name": "Copper Hydroxide 77% WP", "dose": "3g/litre", "timing": "Preventive spray", "price_per_litre": 350, "organic": false },
+      { "name": "Trichoderma viride", "dose": "5g/litre soil drench", "timing": "At planting", "price_per_litre": 120, "organic": true },
+      { "name": "Chlorpyrifos 20% EC", "dose": "2ml/litre", "timing": "For aphids/tuber moth", "price_per_litre": 380, "organic": false }
+    ],
+    "best_practices": [
+      "Use certified seed tubers — cuts disease risk by 60%",
+      "Ridge height minimum 25 cm to protect tubers from blight",
+      "Monitor weather daily — spray before rain in blight-prone seasons",
+      "Harvest at 95% vine death for maximum marketable yield",
+      "Store in cool (4–7°C), dark, ventilated area"
+    ]
+  },
+  "wheat": {
+    "fertilizers": [
+      { "name": "DAP (18-46-0)", "dose": "50 kg/acre", "timing": "At sowing (basal)", "price_per_kg": 27 },
+      { "name": "Urea", "dose": "55 kg/acre", "timing": "Split — 30 and 60 days", "price_per_kg": 7 },
+      { "name": "Zinc Sulphate", "dose": "10 kg/acre", "timing": "Once in 3 years", "price_per_kg": 35 }
+    ],
+    "pesticides": [
+      { "name": "Propiconazole 25% EC", "dose": "1ml/litre", "timing": "At flag leaf stage for rust", "price_per_litre": 480, "organic": false },
+      { "name": "Tebuconazole 25.9% EC", "dose": "1ml/litre", "timing": "For Karnal bunt", "price_per_litre": 520, "organic": false },
+      { "name": "Chlorpyrifos 20% EC", "dose": "2ml/litre", "timing": "For termites at sowing", "price_per_litre": 380, "organic": false }
+    ],
+    "best_practices": [
+      "Sow recommended varieties (HD 2967, GW 496) at right time",
+      "First irrigation at crown root initiation (20–25 DAS) is critical",
+      "Scout for yellow rust weekly from December",
+      "Harvest before 14% grain moisture — prevents storage losses"
+    ]
+  },
+  "cotton": {
+    "fertilizers": [
+      { "name": "NPK 12-32-16", "dose": "50 kg/acre", "timing": "At sowing", "price_per_kg": 24 },
+      { "name": "Urea", "dose": "30 kg/acre", "timing": "Split at 30 and 60 DAS", "price_per_kg": 7 },
+      { "name": "Micronutrient Mix", "dose": "500g/acre foliar", "timing": "At boll formation", "price_per_kg": 250 }
+    ],
+    "pesticides": [
+      { "name": "Imidacloprid 70% WS", "dose": "7g/kg seed", "timing": "Seed treatment for sucking pests", "price_per_litre": 1200, "organic": false },
+      { "name": "Spinosad 45% SC", "dose": "0.3ml/litre", "timing": "For bollworm (alternation)", "price_per_litre": 1800, "organic": true },
+      { "name": "Profenofos 50% EC", "dose": "2ml/litre", "timing": "For bollworm outbreak", "price_per_litre": 420, "organic": false },
+      { "name": "Neem Oil 3000 ppm", "dose": "5ml/litre", "timing": "For sucking pests organic", "price_per_litre": 150, "organic": true }
+    ],
+    "best_practices": [
+      "Use Bt Cotton with refuge rows (5–20%) for resistance management",
+      "Install pheromone traps at 5/acre for bollworm monitoring",
+      "Avoid excessive nitrogen — attracts sucking pests",
+      "Irrigate at boll development stage — critical for yield"
+    ]
+  }
+}

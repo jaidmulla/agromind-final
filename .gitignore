@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Environment
+.env
+backend/.env
+frontend/.env
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Database
+*.sql.bak
+postgres_data/
+
+# Uploads
+backend/uploads/
+uploads/
+
+# ML Models
+ml-service/models/*.h5
+ml-service/models/*.keras
+ml-service/data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
