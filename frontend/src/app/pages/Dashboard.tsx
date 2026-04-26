@@ -88,12 +88,43 @@ function AlertCard({ alert, onResolve }: { alert: Alert; onResolve: () => void }
 export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: stats, isLoading: statsLoading, refetch } = useDashboardStats();
-  const { data: alerts = [], isLoading: alertsLoading } = useAlerts({ is_resolved: false, limit: 10 });
+  const { data: stats, isLoading: statsLoading, error: statsError, refetch } = useDashboardStats();
+  const { data: alerts = [], isLoading: alertsLoading, error: alertsError } = useAlerts({ is_resolved: false, limit: 10 });
   const { data: nearbyAlerts = [] } = useNearbyAlerts();
   const resolveAlert = useResolveAlert();
 
   const isLoading = statsLoading || alertsLoading;
+  const hasError = statsError || alertsError;
+
+  if (hasError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <div className="max-w-md w-full bg-card rounded-2xl p-8 border border-border text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Unable to Load Dashboard</h2>
+          <p className="text-muted-foreground mb-6">
+            We encountered an error fetching your dashboard data. Please try again.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => refetch()}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold transition-all"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => navigate('/scan')}
+              className="flex-1 bg-muted hover:bg-muted/80 text-foreground py-2.5 rounded-lg font-semibold transition-all"
+            >
+              Start Scan
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">

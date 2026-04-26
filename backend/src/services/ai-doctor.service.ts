@@ -495,8 +495,8 @@ export async function generateAIDoctorRecommendations(scan: ScanData): Promise<R
     const diseaseKey = scan.disease_name || 'Healthy';
     const rule = DISEASE_RULES[diseaseKey] || DISEASE_RULES['Healthy'];
 
-    // Step 2: Fetch weather data for context
-    const weather = await fetchWeatherData(scan.latitude, scan.longitude, scan.location);
+    // Step 2: Fetch weather data for context (with userId fallback for user location)
+    const weather = await fetchWeatherData(scan.latitude, scan.longitude, scan.location, scan.user_id);
 
     // Step 3: Count nearby alerts (Community Engine)
     const nearby_alerts = await countNearbyAlerts(scan.latitude, scan.longitude, scan.disease_name);
@@ -562,10 +562,11 @@ export async function generateAIDoctorRecommendations(scan: ScanData): Promise<R
 async function fetchWeatherData(
   latitude?: number,
   longitude?: number,
-  location?: string
+  location?: string,
+  userId?: string
 ): Promise<{ humidity: number; temperature: number; rainfall: boolean }> {
   try {
-    // Use real weather API if coordinates available
+    // Use provided coordinates if available
     if (latitude && longitude) {
       const weatherData = await getWeatherRisk(latitude, longitude);
       return {
@@ -574,8 +575,28 @@ async function fetchWeatherData(
         rainfall: weatherData.rain_probability > 30 || weatherData.description.toLowerCase().includes('rain'),
       };
     }
+
+    // ✅ FIX: If no coordinates provided, fetch user's default location
+    if (userId) {
+      const userRes = await query(
+        `SELECT latitude, longitude FROM users WHERE id = $1`,
+        [userId]
+      );
+      if (userRes.rows.length > 0) {
+        const userLat = parseFloat(userRes.rows[0].latitude);
+        const userLon = parseFloat(userRes.rows[0].longitude);
+        if (Number.isFinite(userLat) && Number.isFinite(userLon)) {
+          const weatherData = await getWeatherRisk(userLat, userLon);
+          return {
+            humidity: weatherData.humidity,
+            temperature: weatherData.temperature,
+            rainfall: weatherData.rain_probability > 30 || weatherData.description.toLowerCase().includes('rain'),
+          };
+        }
+      }
+    }
     
-    // Fallback with realistic defaults
+    // Fallback with realistic defaults (only when no coordinates available)
     logger.warn(`Weather data unavailable for location [${latitude}, ${longitude}, ${location}]`);
     return { humidity: 65, temperature: 25, rainfall: false };
   } catch (err) {

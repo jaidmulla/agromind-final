@@ -54,21 +54,75 @@ Your analysis must include:
 4. Step-by-step treatment with specific Indian market products
 Always respond ONLY with valid JSON. Never include markdown or explanations outside the JSON.`;
 
-  const userPrompt = `Analyze this crop leaf image with maximum precision.
-Respond ONLY with this exact JSON structure — no markdown, no extra text:
+  const userPrompt = `⚠️ CRITICAL: Plant misidentification causes farmer financial losses. Follow these steps EXACTLY:
+
+STEP 1: IDENTIFY LEAF CHARACTERISTICS
+List what you observe about the leaf morphology:
+- Leaf arrangement (simple, compound, pinnate, palmate, etc.)
+- Leaf margins (smooth, serrated, dentate, lobed, etc.)
+- Leaf texture (glossy, matte, hairy/trichomes, smooth, waxy)
+- Leaf color and venation pattern
+- Stem thickness and characteristics
+- Any stipules or leaf bases visible
+- Overall leaf size and shape
+
+STEP 2: MATCH TO KNOWN PLANTS
+Match observed characteristics to these crop profiles:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🥔 POTATO (Solanum tuberosum):
+  • Compound pinnate leaves (5-9 leaflets on petiole)
+  • Oval/elliptic leaflets with pointed tips
+  • SMOOTH leaf margins (KEY: NOT serrated)
+  • Dark green, slightly waxy
+  • Thin green stems
+  • NO visible stipules at base
+  • Leaflets arranged alternately
+
+🍅 TOMATO (Solanum lycopersicum):
+  • Compound pinnate leaves (7-11 leaflets)
+  • SERRATED leaf margins (KEY: distinct saw-tooth edges)
+  • Visible trichomes/hairs on stem and leaves
+  • Bright green, more matte finish
+  • Thicker, more fuzzy stems
+  • VISIBLE stipules at base of petiole
+  • Leaflets more alternately pinnate
+
+🌶️ PEPPER (Capsicum spp):
+  • SIMPLE leaves (not compound)
+  • Smooth, glossy surface
+  • Alternate leaf arrangement
+  • Lanceolate to ovate shape
+  • Thicker, woody stem
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 3: DETERMINE PLANT WITH CONFIDENCE
+- If characteristics match ONE plant clearly: confidence 85-100%
+- If characteristics match TWO plants equally: confidence 50-65% and mention BOTH plants
+- If characteristics are ambiguous: confidence ≤50% and REJECT identification
+
+STEP 4: REJECT COMMON MISTAKES
+❌ If you see smooth margins and compound leaves → NOT TOMATO (reduce confidence by 30%)
+❌ If you see serrated margins and hairy stem → NOT POTATO (reduce confidence by 30%)
+❌ If you see simple leaves → NOT POTATO or TOMATO (it's likely PEPPER or other plant)
+
+STEP 5: DIAGNOSE DISEASE
+ONLY after confirmed plant identification, diagnose disease.
+
+RESPOND ONLY with this JSON (no markdown, no explanations):
 {
   "disease_name": "exact disease common name, or 'Healthy' if no disease",
-  "plant_name": "identified crop/plant name",
-  "confidence": <0-100 number>,
+  "plant_name": "EXACT identified plant (Potato | Tomato | Pepper | Other plant name)",
+  "confidence": <0-100 — MUST reflect actual certainty. <60% if ambiguous>,
   "severity": "critical" | "warning" | "info" | "healthy",
-  "potential_loss_inr": <estimated INR financial loss per acre if untreated, 0 if healthy>,
+  "potential_loss_inr": <estimated INR loss per acre if untreated, 0 if healthy>,
   "recommendation": "1-2 sentence specific treatment using Indian market product names",
-  "regret_insight": "Powerful behavioral message: what happens if farmer ignores this — include exact timeframe, % crop loss, and ₹ amount",
+  "regret_insight": "What happens if farmer delays: exact timeframe, % crop loss, ₹ amount",
   "treatment_steps": [
-    {"step": 1, "title": "step title", "description": "detailed instructions", "duration": "time required", "product": "product name if applicable", "dosage": "dosage if applicable"},
+    {"step": 1, "title": "step title", "description": "detailed instructions", "duration": "time", "product": "product name", "dosage": "dosage"},
     {"step": 2, "title": "...", "description": "...", "duration": "..."},
     {"step": 3, "title": "...", "description": "...", "duration": "..."},
-    {"step": 4, "title": "Monitor & Verify", "description": "monitoring instructions", "duration": "Ongoing"}
+    {"step": 4, "title": "Monitor & Verify", "description": "monitoring", "duration": "Ongoing"}
   ],
   "disease_info": {
     "scientific_name": "Latin name",
@@ -84,6 +138,7 @@ Respond ONLY with this exact JSON structure — no markdown, no extra text:
     "action_cta": "Direct action instruction to farmer"
   }
 }`;
+
 
   const text = await createChatCompletion({
     model: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini',

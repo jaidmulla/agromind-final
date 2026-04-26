@@ -66,7 +66,16 @@ export function Scan() {
       setProgress(100);
       setScanResult(result);
       setScanState('complete');
+
+      // AUTO-NAVIGATE to AI Doctor page after 2 seconds
+      const toastId = toast.success('✅ Scan complete! Generating AI Doctor recommendations...', { duration: 2000 });
+      setTimeout(() => {
+        if (result?.id) {
+          navigate(`/ai-doctor/${result.id}`);
+        }
+      }, 2000);
     } catch (err) {
+      toast.error('Scan failed. Please try again.');
       setScanState('idle');
       setProgress(0);
     }

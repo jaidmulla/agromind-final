@@ -130,10 +130,24 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
     const { crop_id, farm_id, crop_name } = req.body;
     const imageUrl = `/uploads/${req.file.filename}`;
 
+    // ✅ FIX: Validate crop_id belongs to user
     let linkedCropName = '';
     if (crop_id) {
       const linkedCrop = await query('SELECT name FROM crops WHERE id = $1 AND user_id = $2 LIMIT 1', [crop_id, req.user!.id]);
+      if (!linkedCrop.rows.length) {
+        res.status(403).json({ success: false, message: 'Crop not found or does not belong to this user' });
+        return;
+      }
       linkedCropName = linkedCrop.rows[0]?.name || '';
+    }
+
+    // ✅ FIX: Validate farm_id belongs to user
+    if (farm_id) {
+      const linkedFarm = await query('SELECT id FROM farms WHERE id = $1 AND user_id = $2 LIMIT 1', [farm_id, req.user!.id]);
+      if (!linkedFarm.rows.length) {
+        res.status(403).json({ success: false, message: 'Farm not found or does not belong to this user' });
+        return;
+      }
     }
 
     // Run ML + AI in parallel for speed
@@ -394,6 +408,28 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
         ml_confirmation: ml ? { disease: ml.disease, confidence: ml.confidence } : null,
       },
     });
+
+    // ✅ FIX: TRIGGER AI DOCTOR TASK GENERATION IMMEDIATELY (async, non-blocking)
+    try {
+      const { generateAIDoctorRecommendations } = await import('../services/ai-doctor.service');
+      generateAIDoctorRecommendations({
+        id: scan.id,
+        user_id: req.user!.id,
+        crop_id: crop_id || undefined,
+        plant_name: plantName,
+        disease_name: diseaseName,
+        severity: analysis.severity,
+        confidence: finalConfidence,
+        potential_loss: analysis.potential_loss_inr,
+        latitude: undefined, // Will use user's default location
+        longitude: undefined,
+        location: undefined,
+      }).catch(err => {
+        logger.error(`Failed to generate AI Doctor recommendations for scan ${scan.id}:`, err);
+      });
+    } catch (err) {
+      logger.warn('AI Doctor generation not queued (non-critical):', err);
+    }
   } catch (err) {
     logger.error('Scan error:', err);
     if (imagePath && fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
@@ -455,6 +491,12 @@ export const resolveScan = async (req: AuthRequest, res: Response): Promise<void
 
     const scan = scanR.rows[0];
     await query(`UPDATE scans SET status='resolved', resolved_at=NOW() WHERE id=$1`, [scan.id]);
+
+    // ✅ FIX: Mark all related AI Doctor tasks as completed when scan is resolved
+    await query(
+      `UPDATE ai_doctor_tasks SET status='completed', completed_at=NOW() WHERE scan_id=$1 AND status='pending'`,
+      [scan.id]
+    );
 
     const prevented = parseFloat(scan.potential_loss) * 0.85;
     if (prevented > 0) {
