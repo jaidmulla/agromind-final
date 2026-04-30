@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import logger from '../utils/logger';
-import { createChatCompletion } from './openai.service';
+import { callGeminiWithVision, callGeminiText } from './gemini.service';
 
 export interface TreatmentStep {
   step: number;
@@ -140,22 +140,7 @@ RESPOND ONLY with this JSON (no markdown, no explanations):
 }`;
 
 
-  const text = await createChatCompletion({
-    model: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    maxTokens: 1800,
-    temperature: 0.2,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: userPrompt },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
-        ],
-      },
-    ],
-  });
+  const text = await callGeminiWithVision(base64Image, systemPrompt, userPrompt, true);
 
   const cleaned = text.replace(/```json|```/g, '').trim();
 
@@ -171,18 +156,15 @@ export async function generateRegretInsight(
   disease: string, cropName: string, daysIgnored: number, potentialLoss: number
 ): Promise<string> {
   try {
-    const reply = await createChatCompletion({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      maxTokens: 250,
-      temperature: 0.4,
-      messages: [{
-        role: 'user',
-        content: `A farmer detected ${disease} in their ${cropName} crop and ignored it for ${daysIgnored} days.
+    const reply = await callGeminiText(
+      '',
+      `A farmer detected ${disease} in their ${cropName} crop and ignored it for ${daysIgnored} days.
 The potential loss is ₹${potentialLoss.toLocaleString('en-IN')}.
 Write a 2-sentence powerful emotional + financial REGRET message in simple English that motivates immediate action.
 Make it personal, urgent, and specific with numbers. Do not use generic language.`,
-      }],
-    });
+      0.4,
+      250
+    );
     return reply;
   } catch {
     throw new Error('Unable to generate regret insight');
@@ -194,19 +176,15 @@ export async function generateWeatherRiskAnalysis(
   crops: string[]
 ): Promise<{ risk_score: number; diseases_to_watch: string[]; advisory: string }> {
   try {
-    const text = await createChatCompletion({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      maxTokens: 400,
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
-      messages: [{
-        role: 'user',
-        content: `Weather: ${weather.temperature}°C, ${weather.humidity}% humidity, ${weather.rainfall}mm rain.
+    const text = await callGeminiText(
+      '',
+      `Weather: ${weather.temperature}°C, ${weather.humidity}% humidity, ${weather.rainfall}mm rain.
 Crops: ${crops.join(', ')}.
 Respond ONLY with JSON:
 {"risk_score": <0-100>, "diseases_to_watch": ["disease1", "disease2", "disease3"], "advisory": "2-sentence advisory for farmer"}`,
-      }],
-    });
+      0.3,
+      400
+    );
     return JSON.parse(text.replace(/```json|```/g, '').trim());
   } catch {
     throw new Error('Unable to generate weather risk analysis');

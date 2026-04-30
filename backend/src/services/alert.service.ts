@@ -124,8 +124,11 @@ export async function updateNotificationStatus(
     await query(
       `UPDATE notification_logs 
        SET status = $1, error_message = $2, sent_at = CASE WHEN $1 = 'sent' THEN NOW() ELSE sent_at END
-       WHERE user_id = $3 AND type = $4 AND status = 'pending'
-       ORDER BY created_at DESC LIMIT 1`,
+       WHERE id = (
+         SELECT id FROM notification_logs 
+         WHERE user_id = $3 AND type = $4 AND status = 'pending'
+         ORDER BY created_at DESC LIMIT 1
+       )`,
       [status, errorMessage || null, userId, type]
     );
   } catch (err) {

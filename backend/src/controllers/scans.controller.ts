@@ -183,9 +183,20 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
     const expectedCrop = linkedCropName || crop_name || '';
     const expectedNorm = normalizeCropName(expectedCrop);
     const detectedNorm = normalizeCropName(plantName);
-    // If farmer linked a crop and detection disagrees with modest confidence, trust linked crop context.
-    if (expectedNorm && detectedNorm && expectedNorm !== detectedNorm && finalConfidence < 90) {
-      plantName = expectedCrop;
+    
+    // ✅ NEW FIX: If farmer explicitly provided crop_name or crop_id, TRUST IT (for low confidence)
+    // This solves: "I uploaded potato leaf but it says tomato"
+    if (expectedNorm && detectedNorm && expectedNorm !== detectedNorm) {
+      if (finalConfidence < 70) {
+        // Low confidence - trust the explicitly provided crop name
+        logger.warn('Crop mismatch with low confidence: using provided crop name', {
+          detected: plantName,
+          provided: expectedCrop,
+          confidence: finalConfidence,
+          user_id: req.user!.id
+        });
+        plantName = expectedCrop;
+      }
     }
 
     // Merge symptoms from both sources

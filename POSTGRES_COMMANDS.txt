@@ -1,0 +1,506 @@
+================================================================================
+POSTGRESQL CONNECTION & COMMANDS FOR AGROMIND DATABASE
+================================================================================
+
+DATABASE DETAILS:
+- Database Name: agromind_db
+- Username: agromind_user
+- Password: password123
+- Host (Docker): agromind-db
+- Host (Local): localhost
+- Port: 5432
+
+================================================================================
+1. DIRECT CONNECTION COMMANDS
+================================================================================
+
+# Connect as postgres superuser
+psql -U postgres -h localhost -p 5432
+
+# Connect to agromind_db with agromind_user
+psql -U agromind_user -h localhost -p 5432 -d agromind_db
+
+# One-liner connection
+psql postgresql://agromind_user:password123@localhost:5432/agromind_db
+
+# From host to Docker container
+docker exec -it agromind-db psql -U agromind_user -d agromind_db
+
+================================================================================
+2. DATABASE & USER SETUP
+================================================================================
+
+# Create Database
+CREATE DATABASE agromind_db;
+
+# Create User
+CREATE USER agromind_user WITH PASSWORD 'password123';
+
+# Grant Permissions
+GRANT ALL PRIVILEGES ON DATABASE agromind_db TO agromind_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO agromind_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO agromind_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO agromind_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO agromind_user;
+
+================================================================================
+3. VERIFY CONNECTION & INFO
+================================================================================
+
+# Check Database Exists
+\l
+SELECT datname FROM pg_database WHERE datname = 'agromind_db';
+
+# Check Users/Roles
+\du
+SELECT usename FROM pg_user WHERE usename = 'agromind_user';
+
+# Check Connection Details
+SELECT version();
+SELECT current_user;
+SELECT current_database();
+SELECT inet_server_addr(), inet_server_port();
+
+# List All Tables
+\dt
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
+
+================================================================================
+4. TABLE CREATION
+================================================================================
+
+# Create Users Table
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    location VARCHAR(255),
+    latitude DECIMAL(9,6),
+    longitude DECIMAL(9,6),
+    farm_size DECIMAL(10,2),
+    farm_size_unit VARCHAR(10) DEFAULT 'acres',
+    language VARCHAR(10) DEFAULT 'en',
+    profile_image_url TEXT,
+    notification_enabled BOOLEAN DEFAULT true,
+    push_token VARCHAR(500),
+    is_verified BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Farms Table
+CREATE TABLE farms (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    location VARCHAR(255),
+    latitude DECIMAL(9,6),
+    longitude DECIMAL(9,6),
+    total_area DECIMAL(10,2),
+    area_unit VARCHAR(10) DEFAULT 'acres',
+    soil_type VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Crops Table
+CREATE TABLE crops (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    farm_id UUID REFERENCES farms(id) ON DELETE SET NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    variety VARCHAR(100),
+    planting_date DATE,
+    expected_harvest DATE,
+    area_planted DECIMAL(10,2),
+    area_unit VARCHAR(10) DEFAULT 'acres',
+    crop_stage VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Scans Table (Disease Detection)
+CREATE TABLE scans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    crop_id UUID REFERENCES crops(id) ON DELETE SET NULL,
+    farm_id UUID REFERENCES farms(id) ON DELETE SET NULL,
+    image_url VARCHAR(500),
+    image_filename VARCHAR(255),
+    disease_name VARCHAR(255),
+    plant_name VARCHAR(100),
+    confidence DECIMAL(5,2),
+    severity VARCHAR(50),
+    potential_loss DECIMAL(12,2),
+    currency VARCHAR(10) DEFAULT 'INR',
+    recommendation TEXT,
+    regret_insight TEXT,
+    treatment_steps JSONB,
+    disease_info JSONB,
+    ml_raw_result JSONB,
+    ai_response JSONB,
+    source VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'analyzed',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Alerts Table
+CREATE TABLE alerts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    crop_id UUID REFERENCES crops(id) ON DELETE SET NULL,
+    alert_type VARCHAR(50),
+    title VARCHAR(255),
+    message TEXT,
+    severity VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'active',
+    read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create AI Doctor Tasks Table
+CREATE TABLE ai_doctor_tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scan_id UUID REFERENCES scans(id) ON DELETE CASCADE,
+    day INTEGER,
+    title VARCHAR(255),
+    description TEXT,
+    product_name VARCHAR(255),
+    quantity VARCHAR(100),
+    cost_inr DECIMAL(10,2),
+    priority VARCHAR(50),
+    urgency_level VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'pending',
+    disease_name VARCHAR(255),
+    disease_severity VARCHAR(50),
+    weather_context VARCHAR(255),
+    language VARCHAR(10) DEFAULT 'en',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Notification Logs Table
+CREATE TABLE notification_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50),
+    recipient VARCHAR(255),
+    content TEXT,
+    status VARCHAR(50) DEFAULT 'pending',
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Chat History Table
+CREATE TABLE chat_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id VARCHAR(255),
+    message_type VARCHAR(50),
+    message_text TEXT,
+    ai_response TEXT,
+    language VARCHAR(10) DEFAULT 'en',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Weather Alerts Table
+CREATE TABLE weather_alerts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    location VARCHAR(255),
+    alert_type VARCHAR(50),
+    description TEXT,
+    disease_risk VARCHAR(50),
+    temperature DECIMAL(5,2),
+    humidity DECIMAL(5,2),
+    rainfall DECIMAL(10,2),
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Community Posts Table
+CREATE TABLE community_posts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255),
+    content TEXT,
+    category VARCHAR(100),
+    image_url TEXT,
+    likes_count INTEGER DEFAULT 0,
+    comments_count INTEGER DEFAULT 0,
+    views_count INTEGER DEFAULT 0,
+    language VARCHAR(10) DEFAULT 'en',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# Create Government Schemes Table
+CREATE TABLE gov_schemes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    scheme_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    eligibility TEXT,
+    benefits JSONB,
+    state VARCHAR(100),
+    min_age INTEGER,
+    max_age INTEGER,
+    application_url VARCHAR(500),
+    last_updated TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+================================================================================
+5. INSERT DATA
+================================================================================
+
+# Insert User
+INSERT INTO users (name, email, password_hash, phone, location) 
+VALUES ('Farmer John', 'john@agromind.test', 'hashed_pwd_123', '9876543210', 'Kolhapur');
+
+# Insert Farm
+INSERT INTO farms (user_id, name, location, total_area) 
+VALUES ('user-uuid-here', 'Main Farm', 'Kolhapur', 50.5);
+
+# Insert Crop
+INSERT INTO crops (farm_id, user_id, name, variety, planting_date) 
+VALUES ('farm-uuid-here', 'user-uuid-here', 'Potato', 'Jyoti', '2024-01-15');
+
+# Insert Scan (Disease Detection)
+INSERT INTO scans (user_id, crop_id, farm_id, image_url, disease_name, plant_name, confidence, severity) 
+VALUES ('user-uuid', 'crop-uuid', 'farm-uuid', '/uploads/scan_123.jpg', 'Early Blight', 'Potato', 87.5, 'High');
+
+# Insert Alert
+INSERT INTO alerts (user_id, crop_id, alert_type, title, message, severity) 
+VALUES ('user-uuid', 'crop-uuid', 'disease', 'Disease Alert', 'Early Blight detected in Potato', 'High');
+
+# Insert AI Doctor Task
+INSERT INTO ai_doctor_tasks (user_id, scan_id, day, title, product_name, cost_inr, priority, status) 
+VALUES ('user-uuid', 'scan-uuid', 1, 'Spray fungicide', 'Bordeaux Mixture', 450.00, 'high', 'pending');
+
+================================================================================
+6. VIEW DATA
+================================================================================
+
+# View All Users
+SELECT id, name, email, phone, location, created_at FROM users;
+
+# View All Farms
+SELECT id, name, location, total_area FROM farms;
+
+# View All Crops
+SELECT id, name, variety, status, created_at FROM crops;
+
+# View All Scans
+SELECT id, plant_name, disease_name, confidence, severity, created_at 
+FROM scans 
+ORDER BY created_at DESC;
+
+# View Latest Scans for User
+SELECT * FROM scans 
+WHERE user_id = 'user-uuid-here' 
+ORDER BY created_at DESC 
+LIMIT 10;
+
+# View All Diseases Detected
+SELECT DISTINCT disease_name, COUNT(*) as count 
+FROM scans 
+GROUP BY disease_name 
+ORDER BY count DESC;
+
+# View AI Doctor Tasks
+SELECT id, title, product_name, cost_inr, priority, status 
+FROM ai_doctor_tasks 
+WHERE user_id = 'user-uuid-here' 
+ORDER BY created_at DESC;
+
+# View Alerts
+SELECT id, alert_type, title, message, severity, status FROM alerts;
+
+# View User Farm Statistics
+SELECT 
+    u.name as farmer,
+    COUNT(DISTINCT f.id) as total_farms,
+    COUNT(DISTINCT c.id) as total_crops,
+    COUNT(DISTINCT s.id) as total_scans,
+    COUNT(DISTINCT CASE WHEN s.disease_name != 'Healthy' THEN s.id END) as disease_detections
+FROM users u
+LEFT JOIN farms f ON u.id = f.user_id
+LEFT JOIN crops c ON u.id = c.user_id
+LEFT JOIN scans s ON u.id = s.user_id
+WHERE u.id = 'user-uuid-here'
+GROUP BY u.id, u.name;
+
+# View Crop Disease History
+SELECT crop_id, disease_name, COUNT(*) as occurrences, MAX(created_at) as last_detected
+FROM scans
+GROUP BY crop_id, disease_name
+ORDER BY last_detected DESC;
+
+================================================================================
+7. UPDATE DATA
+================================================================================
+
+# Update User Profile
+UPDATE users 
+SET name = 'John Doe', phone = '9876543210', updated_at = NOW() 
+WHERE id = 'user-uuid-here';
+
+# Update Scan Status
+UPDATE scans 
+SET status = 'reviewed', updated_at = NOW() 
+WHERE id = 'scan-uuid-here';
+
+# Mark Alert as Read
+UPDATE alerts 
+SET status = 'read', updated_at = NOW() 
+WHERE id = 'alert-uuid-here';
+
+# Complete AI Doctor Task
+UPDATE ai_doctor_tasks 
+SET status = 'completed', updated_at = NOW() 
+WHERE id = 'task-uuid-here';
+
+# Update Crop Status
+UPDATE crops 
+SET status = 'harvested', crop_stage = 'post-harvest', updated_at = NOW() 
+WHERE id = 'crop-uuid-here';
+
+# Update Farm Details
+UPDATE farms 
+SET soil_type = 'Loamy', total_area = 75.5, updated_at = NOW() 
+WHERE id = 'farm-uuid-here';
+
+================================================================================
+8. DELETE DATA
+================================================================================
+
+# Delete Old Scans (older than 90 days)
+DELETE FROM scans 
+WHERE created_at < NOW() - INTERVAL '90 days';
+
+# Delete Expired Alerts
+DELETE FROM alerts 
+WHERE status = 'read' AND created_at < NOW() - INTERVAL '30 days';
+
+# Delete User and Related Data (CASCADE)
+DELETE FROM users 
+WHERE id = 'user-uuid-here';
+
+# Delete Specific Scan
+DELETE FROM scans 
+WHERE id = 'scan-uuid-here';
+
+================================================================================
+9. INDEXES (FOR PERFORMANCE)
+================================================================================
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_created_at ON users(created_at DESC);
+CREATE INDEX idx_farms_user_id ON farms(user_id);
+CREATE INDEX idx_crops_user_id ON crops(user_id);
+CREATE INDEX idx_crops_status ON crops(status);
+CREATE INDEX idx_scans_user_id ON scans(user_id);
+CREATE INDEX idx_scans_crop_id ON scans(crop_id);
+CREATE INDEX idx_scans_created_at ON scans(created_at DESC);
+CREATE INDEX idx_scans_disease ON scans(disease_name);
+CREATE INDEX idx_alerts_user_id ON alerts(user_id);
+CREATE INDEX idx_alerts_status ON alerts(status);
+CREATE INDEX idx_ai_doctor_tasks_user_scan ON ai_doctor_tasks(user_id, scan_id);
+CREATE INDEX idx_ai_doctor_tasks_status ON ai_doctor_tasks(status);
+CREATE INDEX idx_ai_doctor_tasks_priority ON ai_doctor_tasks(priority);
+CREATE INDEX idx_chat_user_session ON chat_history(user_id, session_id);
+CREATE INDEX idx_weather_alerts_user ON weather_alerts(user_id);
+CREATE INDEX idx_community_user_id ON community_posts(user_id);
+CREATE INDEX idx_community_category ON community_posts(category);
+CREATE INDEX idx_community_created_at ON community_posts(created_at DESC);
+
+================================================================================
+10. BACKUP & RESTORE
+================================================================================
+
+# Backup Database (from host)
+pg_dump -U agromind_user -h localhost -d agromind_db > backup.sql
+
+# Backup Database (from Docker)
+docker exec agromind-db pg_dump -U agromind_user -d agromind_db > backup.sql
+
+# Restore Database (from host)
+psql -U agromind_user -h localhost -d agromind_db < backup.sql
+
+# Restore Database (from Docker)
+docker exec -i agromind-db psql -U agromind_user -d agromind_db < backup.sql
+
+# Load postgres.db.sql File
+docker exec -i agromind-db psql -U agromind_user -d agromind_db < postgres.db.sql
+
+================================================================================
+11. QUICK TESTS
+================================================================================
+
+# Test if PostgreSQL is running
+docker exec agromind-db pg_isready -U agromind_user
+
+# Test connection with query
+docker exec agromind-db psql -U agromind_user -d agromind_db -c "SELECT version();"
+
+# List all tables
+docker exec agromind-db psql -U agromind_user -d agromind_db -c "\dt"
+
+# Count total users
+docker exec agromind-db psql -U agromind_user -d agromind_db -c "SELECT COUNT(*) FROM users;"
+
+# Count total scans
+docker exec agromind-db psql -U agromind_user -d agromind_db -c "SELECT COUNT(*) FROM scans;"
+
+# Show database size
+docker exec agromind-db psql -U agromind_user -d agromind_db -c "SELECT pg_size_pretty(pg_database_size('agromind_db'));"
+
+================================================================================
+12. CONNECTION STRINGS FOR CODE
+================================================================================
+
+# Node.js/Backend (Docker Internal)
+postgresql://agromind_user:password123@postgres:5432/agromind_db
+
+# Local Machine
+postgresql://agromind_user:password123@localhost:5432/agromind_db
+
+# Python
+import psycopg2
+conn = psycopg2.connect(
+    dbname="agromind_db",
+    user="agromind_user",
+    password="password123",
+    host="localhost",
+    port="5432"
+)
+
+================================================================================
+13. USEFUL PSQL COMMANDS
+================================================================================
+
+\l              - List all databases
+\du             - List all users/roles
+\dt             - List all tables
+\di             - List all indexes
+\df             - List all functions
+\dv             - List all views
+\d table_name   - Describe table structure
+\x              - Toggle expanded display
+\q              - Exit psql
+\c database     - Connect to database
+\i file.sql     - Execute SQL file
+\copy           - Copy data from/to file
+
+================================================================================
+END OF POSTGRES COMMANDS
+================================================================================
