@@ -6,7 +6,7 @@ import { getCoordinatesByCity, getWeatherRisk, saveWeatherSnapshot } from '../se
 export const getDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const uid = req.user!.id;
-    const [lossR, alertR, cropsR] = await Promise.all([
+    const [lossR, alertR, cropsR, scansR] = await Promise.all([
       query(
         `SELECT COALESCE(SUM(amount_prevented),0) as total,
                 COALESCE(SUM(amount_prevented) FILTER (WHERE recorded_at >= CURRENT_DATE),0) as today
@@ -18,12 +18,19 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
          FROM alerts WHERE user_id=$1`, [uid]
       ),
       query(`SELECT COUNT(*) as count FROM crops WHERE user_id=$1`, [uid]),
+      query(
+        `SELECT COUNT(*) as total,
+                COUNT(*) FILTER (WHERE status='resolved') as resolved
+         FROM scans WHERE user_id=$1`, [uid]
+      ),
     ]);
 
     const activeAlerts = parseInt(alertR.rows[0].active) || 0;
     const criticalAlerts = parseInt(alertR.rows[0].critical) || 0;
-    const protectionRate = activeAlerts > 0
-      ? Math.max(0, Math.min(100, Math.round(((activeAlerts - criticalAlerts) / activeAlerts) * 100)))
+    const totalScans = parseInt(scansR.rows[0].total) || 0;
+    const resolvedScans = parseInt(scansR.rows[0].resolved) || 0;
+    const protectionRate = totalScans > 0
+      ? Math.round((resolvedScans / totalScans) * 100)
       : 100;
 
     res.json({

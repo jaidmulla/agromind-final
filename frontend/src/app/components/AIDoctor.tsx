@@ -128,13 +128,26 @@ export function AIDoctor({
   if (error || !rec) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-center text-red-600">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4" />
-          <p>
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-600" />
+          <p className="text-red-600 font-semibold mb-4">
             {language === 'hi' && 'सिफारिशें लोड नहीं की जा सकीं'}
             {language === 'mr' && 'शिफारशी लोड करू शकत नाही'}
             {language === 'en' && 'Failed to load recommendations'}
           </p>
+          <p className="text-gray-600 text-sm mb-6">
+            {language === 'hi' && 'कृपया कुछ क्षण बाद पुनः प्रयास करें या डैशबोर्ड पर लौटें।'}
+            {language === 'mr' && 'कृपया काही क्षणांनंतर पुन्हा प्रयत्न करा किंवा डॅशबोर्डवर परत या।'}
+            {language === 'en' && 'Please try again in a moment or return to the dashboard.'}
+          </p>
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="inline-block bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition"
+          >
+            {language === 'hi' && 'डैशबोर्ड पर वापस जाएं'}
+            {language === 'mr' && 'डॅशबोर्डवर परत या'}
+            {language === 'en' && 'Back to Dashboard'}
+          </button>
         </div>
       </div>
     );

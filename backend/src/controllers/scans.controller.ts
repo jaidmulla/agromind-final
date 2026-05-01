@@ -13,6 +13,43 @@ function normalizeCropName(value: string): string {
   return (value || '').toLowerCase().replace(/[^a-z]/g, '');
 }
 
+// ✅ FIX: Clean disease names that include plant names (e.g., "Healthy Tomato" → "Healthy")
+function cleanDiseaseName(rawDiseaseName: string): string {
+  if (!rawDiseaseName) return 'Healthy';
+
+  // Remove common plant names that might be appended to disease names
+  const plantNamesToRemove = [
+    'tomato', 'potato', 'pepper', 'chilli', 'onion', 'garlic', 'brinjal',
+    'cucumber', 'pumpkin', 'melon', 'watermelon', 'carrot', 'beet',
+    'spinach', 'cabbage', 'cauliflower', 'bean', 'pea', 'maize', 'corn',
+    'wheat', 'rice', 'sugarcane', 'cotton', 'apple', 'mango', 'banana',
+    'grape', 'citrus', 'lemon', 'orange', 'coconut', 'palm', 'sugarbeet'
+  ];
+
+  let cleaned = rawDiseaseName.trim();
+
+  // If it starts with "Healthy", extract just "Healthy"
+  if (cleaned.toLowerCase().startsWith('healthy')) {
+    // Check if there's a plant name after "Healthy"
+    const afterHealthy = cleaned.substring(7).trim();
+    if (afterHealthy && plantNamesToRemove.includes(afterHealthy.toLowerCase())) {
+      return 'Healthy';
+    }
+    return 'Healthy';
+  }
+
+  // Remove trailing plant names
+  for (const plantName of plantNamesToRemove) {
+    const plantRegex = new RegExp(`\\b${plantName}\\s*$`, 'i');
+    if (plantRegex.test(cleaned)) {
+      cleaned = cleaned.replace(plantRegex, '').trim();
+    }
+  }
+
+  return cleaned || 'Healthy';
+}
+
+
 function buildFallbackAnalysisFromML(ml: NonNullable<Awaited<ReturnType<typeof predictWithML>>>) {
   const isHealthy = ml.is_healthy || /healthy/i.test(ml.disease || '');
   const severity: 'critical' | 'warning' | 'info' | 'healthy' =
@@ -177,7 +214,9 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
     const source = ai && ml ? 'combined' : ai ? 'ai' : 'ml';
 
     // Use ML disease name if available and confidence is high
-    const diseaseName = (ml && ml.confidence > 75) ? ml.disease : analysis.disease_name;
+    const diseaseName = cleanDiseaseName(
+      (ml && ml.confidence > 75) ? ml.disease : analysis.disease_name
+    );
     let plantName = (ml && ml.plant) ? ml.plant : (analysis.plant_name || crop_name || 'Unknown');
 
     const expectedCrop = linkedCropName || crop_name || '';

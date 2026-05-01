@@ -1,14 +1,23 @@
 
 """
-AgroMind Regret AI+ — ML Service v2.0
-Features: MobileNetV2 disease detection, leaf ID, symptom analysis,
-          financial loss projection, Regret AI behavioral engine.
+AgroMind Regret AI+ — ML Service v3.0
+Features: LeafAI expertise, MobileNetV2 disease detection, leaf ID, symptom analysis,
+          financial loss projection, Regret AI behavioral engine,
+          ML operations: Classification, Regression, Clustering, Anomaly Detection.
 """
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn, numpy as np, os, json, logging, io
 from PIL import Image
 from pathlib import Path
+
+# LeafAI Integration
+try:
+    from leaf_ai_service import LeafAIService
+    LEAFAI_AVAILABLE = True
+except ImportError:
+    LEAFAI_AVAILABLE = False
+    print("⚠️ LeafAI service not available")
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -96,6 +105,7 @@ DEFAULT_INFO = {"common_name":"Unknown Condition","scientific_name":"Unknown pat
 
 model = None
 IMG_SIZE = (224, 224)
+leaf_ai = None  # LeafAI Service instance
 
 def load_model():
     global model
@@ -109,6 +119,16 @@ def load_model():
         logger.info(f"✅ Model loaded: {model.count_params():,} parameters")
     except Exception as e:
         logger.error(f"Model load failed: {e}")
+
+def load_leafai():
+    """Initialize LeafAI service with disease database"""
+    global leaf_ai, DISEASE_DB
+    try:
+        leaf_ai = LeafAIService(disease_db=DISEASE_DB)
+        logger.info(f"✅ LeafAI service initialized - KB has {leaf_ai.kb.kb.get('kb_path', 'unknown')} records")
+    except Exception as e:
+        logger.error(f"LeafAI initialization failed: {e}")
+        leaf_ai = None
 
 def preprocess(img_bytes: bytes):
     img = Image.open(io.BytesIO(img_bytes)).convert("RGB").resize(IMG_SIZE, Image.LANCZOS)
@@ -168,12 +188,15 @@ async def startup():
     load_class_labels()
     load_disease_db()
     load_model()
+    if LEAFAI_AVAILABLE:
+        load_leafai()
+        logger.info("🧠 LeafAI Expert System Ready - Autonomous Leaf Intelligence Activated")
 
 @app.get("/")
-def root(): return {"service": "AgroMind ML", "version": "2.0.0", "model_loaded": model is not None, "classes": len(CLASS_LABELS), "diseases_in_db": len(DISEASE_DB)}
+def root(): return {"service": "AgroMind ML", "version": "3.0.0", "model_loaded": model is not None, "leafai_available": LEAFAI_AVAILABLE and leaf_ai is not None, "classes": len(CLASS_LABELS), "diseases_in_db": len(DISEASE_DB)}
 
 @app.get("/health")
-def health(): return {"status": "ok", "model_loaded": model is not None}
+def health(): return {"status": "ok", "model_loaded": model is not None, "leafai_status": "ready" if (LEAFAI_AVAILABLE and leaf_ai) else "unavailable"}
 
 @app.get("/diseases")
 def list_diseases():
@@ -184,6 +207,185 @@ def get_disease(label: str):
     info = DISEASE_DB.get(label)
     if not info: raise HTTPException(404, f"Disease '{label}' not in database")
     return info
+
+# ════════════════════════════════════════════════════════════════════════════════
+# 🧠 LEAFAI ENDPOINTS — Expert Leaf Identification & ML Operations
+# ════════════════════════════════════════════════════════════════════════════════
+
+@app.post("/leafai/identify")
+async def leafai_identify(image: UploadFile = File(...), override_class: str = None):
+    """
+    🌿 LeafAI Identification with Permanent Knowledge Storage
+    
+    Returns:
+    - Leaf ID (auto-generated UUID)
+    - Plant name + Scientific name + Family
+    - Confidence score + Interpretation
+    - Disease info (if diseased)
+    - TOP 5 similarity matches
+    - Anomaly detection alert
+    - All ML operations performed
+    """
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(400, "File must be an image")
+    
+    img_bytes = await image.read()
+    if len(img_bytes) > 15 * 1024 * 1024:
+        raise HTTPException(400, "Image too large (max 15MB)")
+    
+    if model is None:
+        raise HTTPException(503, "Model is not loaded")
+    
+    try:
+        import tensorflow as tf
+        arr = preprocess(img_bytes)
+        preds = model.predict(arr, verbose=0)[0]
+        idx = int(np.argmax(preds))
+        
+        if idx >= len(CLASS_LABELS):
+            raise ValueError(f"Model output index {idx} outside class label range")
+        
+        label = CLASS_LABELS[idx]
+        conf = float(preds[idx]) * 100
+        
+        # Get top 5 model predictions
+        top5_model = [
+            {"label": CLASS_LABELS[i], "confidence": round(float(preds[i]) * 100, 2)}
+            for i in np.argsort(preds)[::-1][:5]
+            if i < len(CLASS_LABELS)
+        ]
+        
+        # Call LeafAI identification
+        model_prediction = {
+            "class_label": label,
+            "confidence": conf,
+            "top5": top5_model
+        }
+        
+        result = leaf_ai.identify_leaf(
+            model_predictions=model_prediction,
+            img_bytes=img_bytes,
+            manual_override=override_class
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"LeafAI identification error: {e}")
+        raise HTTPException(500, f"Identification failed: {str(e)}")
+
+@app.post("/leafai/identify/manual")
+async def leafai_identify_manual(
+    image: UploadFile = File(...),
+    common_name: str = None,
+    scientific_name: str = None,
+    family: str = None,
+    health_status: str = "Healthy",
+    confidence: float = 95.0
+):
+    """
+    🌿 Manual Leaf Identification with User-Provided Metadata
+    Useful for expert verification or training
+    """
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    img_bytes = await image.read() if image else None
+    
+    try:
+        # Create manual leaf record
+        kb_result = leaf_ai.kb.add_leaf(
+            common_name=common_name or "Unknown",
+            scientific_name=scientific_name or "Unknown",
+            family=family or "Unknown",
+            health_status=health_status,
+            img_bytes=img_bytes,
+            confidence=confidence,
+            source="manual_expert"
+        )
+        
+        return {
+            "status": "success",
+            "message": "Leaf manually registered in knowledge base",
+            **kb_result
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Manual registration failed: {str(e)}")
+
+@app.get("/leafai/leaf/{leaf_id}")
+def leafai_get_leaf(leaf_id: str):
+    """Retrieve a stored leaf record by ID"""
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    leaf = leaf_ai.kb.get_leaf(leaf_id)
+    if not leaf:
+        raise HTTPException(404, f"Leaf {leaf_id} not found")
+    
+    return leaf
+
+@app.post("/leafai/regression/{leaf_id}")
+def leafai_regression(leaf_id: str):
+    """
+    📊 REGRESSION: Predict crop yield, disease severity, days to harvest
+    """
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    result = leaf_ai.perform_regression(leaf_id, {})
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    
+    return result
+
+@app.get("/leafai/clustering")
+def leafai_clustering(limit: int = 10):
+    """
+    🔀 CLUSTERING: Group similar leaves by shape, color, texture, disease patterns
+    Unsupervised learning - discovers natural groupings
+    """
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    return leaf_ai.perform_clustering(limit=limit)
+
+@app.get("/leafai/anomalies")
+def leafai_detect_anomalies():
+    """
+    🚨 ANOMALY DETECTION: Detect unusual leaf patterns, rare diseases, mutations
+    """
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    return leaf_ai.detect_anomalies()
+
+@app.get("/leafai/knowledge-base/stats")
+def leafai_kb_stats():
+    """📈 Get LeafAI Knowledge Base Statistics"""
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    return leaf_ai.get_knowledge_base_stats()
+
+@app.get("/leafai/knowledge-base/search")
+def leafai_search(plant_name: str = None, min_confidence: float = 0.0):
+    """🔍 Search knowledge base by plant name"""
+    if not LEAFAI_AVAILABLE or not leaf_ai:
+        raise HTTPException(503, "LeafAI service not available")
+    
+    if not plant_name:
+        raise HTTPException(400, "plant_name query parameter required")
+    
+    results = leaf_ai.kb.find_similar_leaves(plant_name)
+    
+    return {
+        "search_query": plant_name,
+        "total_results": len(results),
+        "results": results
+    }
 
 @app.post("/predict")
 async def predict(image: UploadFile = File(...)):

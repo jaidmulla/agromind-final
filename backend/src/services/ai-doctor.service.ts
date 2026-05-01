@@ -63,6 +63,182 @@ interface ScanData {
   location?: string;
 }
 
+// ── DISEASE NAME MAPPING: Normalize incoming disease names to DISEASE_RULES keys ───
+
+const DISEASE_MAPPING: Record<string, string> = {
+  // Healthy variations (with plant names)
+  'healthy': 'Healthy',
+  'healthy tomato': 'Healthy',
+  'healthy potato': 'Healthy',
+  'healthy pepper': 'Healthy',
+  'healthy chilli': 'Healthy',
+  'healthy cucumber': 'Healthy',
+  'healthy onion': 'Healthy',
+  'healthy garlic': 'Healthy',
+  'healthy brinjal': 'Healthy',
+  'healthy plant': 'Healthy',
+  'no disease': 'Healthy',
+  'nodisease': 'Healthy',
+  'clean': 'Healthy',
+  'normal': 'Healthy',
+  'no pest': 'Healthy',
+  
+  // Early Blight variations
+  'early blight': 'Early Blight',
+  'earlyblight': 'Early Blight',
+  'early-blight': 'Early Blight',
+  'early_blight': 'Early Blight',
+  'stem and leaf spot': 'Early Blight',
+  'TunaSeporia': 'Early Blight',
+
+  // Late Blight variations
+  'late blight': 'Late Blight',
+  'lateblight': 'Late Blight',
+  'late-blight': 'Late Blight',
+  'late_blight': 'Late Blight',
+  'phytophthora': 'Late Blight',
+  'phytophthora infestans': 'Late Blight',
+
+  // Powdery Mildew variations
+  'powdery mildew': 'Powdery Mildew',
+  'powderymildew': 'Powdery Mildew',
+  'powdery-mildew': 'Powdery Mildew',
+  'powdery_mildew': 'Powdery Mildew',
+  'white powder': 'Powdery Mildew',
+  'erysiphe': 'Powdery Mildew',
+
+  // Leaf Spot variations
+  'leaf spot': 'Leaf Spot',
+  'leafspot': 'Leaf Spot',
+  'leaf-spot': 'Leaf Spot',
+  'leaf_spot': 'Leaf Spot',
+  'septoria leaf spot': 'Septoria Leaf Blotch',
+  'fungal spot': 'Leaf Spot',
+
+  // Anthracnose variations
+  'anthracnose': 'Anthracnose',
+  'glomerella': 'Anthracnose',
+  'anthracnose fruit rot': 'Anthracnose',
+
+  // Rust variations
+  'rust': 'Rust',
+  'leaf rust': 'Rust',
+  'stem rust': 'Rust',
+  'puccinia': 'Rust',
+
+  // Downy Mildew variations
+  'downy mildew': 'Downy Mildew',
+  'downymildew': 'Downy Mildew',
+  'downy-mildew': 'Downy Mildew',
+  'downy_mildew': 'Downy Mildew',
+  'plasmopara': 'Downy Mildew',
+
+  // Septoria Leaf Blotch variations
+  'septoria leaf blotch': 'Septoria Leaf Blotch',
+  'septoria': 'Septoria Leaf Blotch',
+  'septoria blotch': 'Septoria Leaf Blotch',
+
+  // Fusarium Wilt variations
+  'fusarium wilt': 'Fusarium Wilt',
+  'fusarium': 'Fusarium Wilt',
+  'fusariosis': 'Fusarium Wilt',
+  'vascular wilt': 'Fusarium Wilt',
+
+  // Bacterial Leaf Spot variations
+  'bacterial leaf spot': 'Bacterial Leaf Spot',
+  'bacterial spot': 'Bacterial Leaf Spot',
+  'xanthomonas': 'Bacterial Leaf Spot',
+
+  // Bud Rot variations
+  'bud rot': 'Bud Rot',
+  'budrot': 'Bud Rot',
+  'terminal rot': 'Bud Rot',
+
+  // Yellow Mosaic Virus variations
+  'yellow mosaic': 'Yellow Mosaic Virus',
+  'yellow mosaic virus': 'Yellow Mosaic Virus',
+  'ymv': 'Yellow Mosaic Virus',
+  'virus': 'Yellow Mosaic Virus',
+
+  // Leaf Curl variations
+  'leaf curl': 'Leaf Curl',
+  'leafcurl': 'Leaf Curl',
+  'curly leaves': 'Leaf Curl',
+  'leaf curling': 'Leaf Curl',
+
+  // Root Knot Nematode variations
+  'root knot nematode': 'Root Knot Nematode',
+  'root knot': 'Root Knot Nematode',
+  'rootknot': 'Root Knot Nematode',
+  'nematode': 'Root Knot Nematode',
+
+  // Sclerotium Rot variations
+  'sclerotium rot': 'Sclerotium Rot',
+  'sclerotinia': 'Sclerotium Rot',
+  'southern blight': 'Sclerotium Rot',
+  'white rot': 'Sclerotium Rot',
+
+  // Thrips Damage variations
+  'thrips': 'Thrips Damage',
+  'thrips damage': 'Thrips Damage',
+  'thrips infestation': 'Thrips Damage',
+
+  // Spider Mites variations
+  'spider mite': 'Spider Mites',
+  'spider mites': 'Spider Mites',
+  'red spider mite': 'Spider Mites',
+  'tetranychus': 'Spider Mites',
+  'mites': 'Spider Mites',
+
+  // Gray Mold (Botrytis) variations
+  'gray mold': 'Gray Mold (Botrytis)',
+  'grey mold': 'Gray Mold (Botrytis)',
+  'botrytis': 'Gray Mold (Botrytis)',
+  'botrytis cinerea': 'Gray Mold (Botrytis)',
+
+  // Healthy variations
+  'healthy': 'Healthy',
+  'no disease': 'Healthy',
+  'nodisease': 'Healthy',
+  'clean': 'Healthy',
+  'normal': 'Healthy',
+  'no pest': 'Healthy',
+};
+
+function normalizeDiseaseNameForLookup(diseaseName: string): string {
+  if (!diseaseName) return 'Healthy';
+  
+  // Normalize: lowercase, trim, remove extra spaces/underscores/hyphens
+  const normalized = diseaseName
+    .toLowerCase()
+    .trim()
+    .replace(/[_\-]/g, ' ')
+    .replace(/\s+/g, ' ');
+  
+  // Direct lookup in mapping
+  if (DISEASE_MAPPING[normalized]) {
+    return DISEASE_MAPPING[normalized];
+  }
+
+  // Fallback: Check if contains any known disease key substrings
+  const lowerDisease = diseaseName.toLowerCase();
+  const diseaseKeys = Object.keys(DISEASE_RULES);
+  
+  for (const key of diseaseKeys) {
+    if (key !== 'Healthy' && lowerDisease.includes(key.toLowerCase())) {
+      return key;
+    }
+  }
+
+  // If still not found, log warning and default to Healthy
+  logger.warn('Unknown disease name, defaulting to Healthy', {
+    original: diseaseName,
+    normalized,
+  });
+  
+  return 'Healthy';
+}
+
 // ── 1️⃣ RULE ENGINE: Disease → Treatment Mapping ──────────────────────────
 
 const DISEASE_RULES: Record<string, {
@@ -491,9 +667,10 @@ export function calculateUrgency(
 
 export async function generateAIDoctorRecommendations(scan: ScanData): Promise<RecommendationResponse> {
   try {
-    // Step 1: Get Rule Engine output
-    const diseaseKey = scan.disease_name || 'Healthy';
-    const rule = DISEASE_RULES[diseaseKey] || DISEASE_RULES['Healthy'];
+    // Step 1: Get Rule Engine output with normalized disease name
+    // ✅ FIX: Normalize disease name to match DISEASE_RULES keys exactly
+    const diseaseKey = normalizeDiseaseNameForLookup(scan.disease_name || 'Healthy');
+    const rule = DISEASE_RULES[diseaseKey]; // diseaseKey is now guaranteed to exist
 
     // Step 2: Fetch weather data for context (with userId fallback for user location)
     const weather = await fetchWeatherData(scan.latitude, scan.longitude, scan.location, scan.user_id);

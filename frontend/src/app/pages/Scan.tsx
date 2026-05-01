@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Camera, CheckCircle, AlertCircle, Loader2, X, Upload, ImageIcon } from 'lucide-react';
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { useCreateScan, useCrops } from '../../hooks';
+import { useCreateScan, useCrops, useDashboardStats } from '../../hooks';
 import type { Scan } from '../../types';
 import { toast } from 'sonner';
 
@@ -21,6 +21,7 @@ export function Scan() {
   const [selectedCropId, setSelectedCropId] = useState('');
   const createScan = useCreateScan();
   const { data: crops = [] } = useCrops();
+  const { refetch: refetchDashboard } = useDashboardStats();
 
   const handleFileSelect = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
@@ -67,13 +68,16 @@ export function Scan() {
       setScanResult(result);
       setScanState('complete');
 
-      // AUTO-NAVIGATE to AI Doctor page after 2 seconds
-      const toastId = toast.success('✅ Scan complete! Generating AI Doctor recommendations...', { duration: 2000 });
+      // Refresh dashboard to show new alert
+      await refetchDashboard();
+
+      // AUTO-NAVIGATE to AI Doctor page after 2 seconds with alert notification
+      const toastId = toast.success('✅ Scan complete! Alert created. Opening treatment recommendations...', { duration: 2500 });
       setTimeout(() => {
         if (result?.id) {
           navigate(`/ai-doctor/${result.id}`);
         }
-      }, 2000);
+      }, 2500);
     } catch (err) {
       toast.error('Scan failed. Please try again.');
       setScanState('idle');
