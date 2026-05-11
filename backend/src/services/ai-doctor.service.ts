@@ -735,6 +735,25 @@ async function fetchWeatherData(
   location?: string,
   userId?: string
 ): Promise<{ humidity: number; temperature: number; rainfall: boolean }> {
+  const latestSnapshot = async () => {
+    if (!userId) return null;
+    const snapshot = await query(
+      `SELECT humidity, temperature, rainfall, rain_probability, description
+       FROM weather_snapshots
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+    const row = snapshot.rows[0];
+    if (!row) return null;
+    return {
+      humidity: Number(row.humidity),
+      temperature: Number(row.temperature),
+      rainfall: Number(row.rainfall) > 0 || Number(row.rain_probability) > 30 || String(row.description || '').toLowerCase().includes('rain'),
+    };
+  };
+
   try {
     // Use provided coordinates if available
     if (latitude && longitude) {
@@ -765,13 +784,16 @@ async function fetchWeatherData(
         }
       }
     }
-    
-    // Fallback with realistic defaults (only when no coordinates available)
-    logger.warn(`Weather data unavailable for location [${latitude}, ${longitude}, ${location}]`);
-    return { humidity: 65, temperature: 25, rainfall: false };
+
+    const snapshotWeather = await latestSnapshot();
+    if (snapshotWeather) return snapshotWeather;
+
+    throw new Error(`Weather data unavailable for location [${latitude}, ${longitude}, ${location}]`);
   } catch (err) {
-    logger.warn('Weather API error, using defaults', { err: String(err) });
-    return { humidity: 65, temperature: 25, rainfall: false };
+    const snapshotWeather = await latestSnapshot();
+    if (snapshotWeather) return snapshotWeather;
+    logger.warn('Weather API error and no weather snapshot available', { err: String(err) });
+    throw err;
   }
 }
 

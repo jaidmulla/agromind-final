@@ -88,7 +88,29 @@ export function Solution() {
     regret_analysis?: { regret_score: number; urgency_level: string; emotional_message: string; financial_message: string; social_proof: string; countdown_message: string; daily_loss_inr: number; treatment_cost_inr: number; roi_multiplier: number };
     regret_timeline?: Array<{ day: number; cumulative_loss_inr: number; label: string; is_critical: boolean }>;
     behavioral_triggers?: { regret_score: number; loss_timeline?: [] };
-    disease_info?: { scientific_name: string; symptoms: string[]; spread_mechanism: string; prevention: string; affected_crops: string[] };
+    disease_info?: {
+      scientific_name: string;
+      symptoms: string[];
+      spread_mechanism: string;
+      prevention: string;
+      affected_crops: string[];
+      causes?: string[];
+      organic_treatment?: string;
+      chemical_treatment?: string;
+      prevention_tips?: string[];
+      recovery_chances?: string;
+      recommended_fertilizer?: string;
+      irrigation_suggestions?: string;
+      next_monitoring_time?: string;
+      yield_loss_percent?: number;
+      weather_risk_analysis?: {
+        humidity_risk: string;
+        temperature_risk: string;
+        rainfall_impact: string;
+        disease_spread_probability: string;
+        recommendation: string;
+      } | null;
+    };
   });
 
   const toggleStep = (i: number) => {
@@ -162,11 +184,16 @@ export function Solution() {
               </div>
               <h2 className="text-2xl font-bold mb-1">{scan.disease_name}</h2>
               <p className="text-muted-foreground text-sm mb-4">Detected in: <strong>{scan.plant_name}</strong></p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-red-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Potential Loss</p>
                   <p className="text-xl font-bold text-[#D32F2F]" style={{ fontFamily: 'monospace' }}>{formatINR(potentialLoss)}</p>
                   <p className="text-xs text-muted-foreground">per acre</p>
+                </div>
+                <div className="bg-[#FFF3E0] rounded-xl p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Yield Loss Risk</p>
+                  <p className="text-xl font-bold text-[#FF6F00]" style={{ fontFamily: 'monospace' }}>{Math.round(diseaseInfo?.yield_loss_percent || 0)}%</p>
+                  <p className="text-xs text-muted-foreground">AI estimate</p>
                 </div>
                 <div className="bg-[#E8F5E9] rounded-xl p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Preventable</p>
@@ -253,6 +280,50 @@ export function Solution() {
             className="bg-[#E8F5E9] border border-[#2E7D32]/30 rounded-xl p-5">
             <p className="font-bold text-[#2E7D32] mb-2">💡 AI Recommendation</p>
             <p className="text-sm">{scan.recommendation}</p>
+          </motion.div>
+        )}
+
+        {(diseaseInfo?.recovery_chances || diseaseInfo?.recommended_fertilizer || diseaseInfo?.irrigation_suggestions || diseaseInfo?.next_monitoring_time) && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+            className="grid md:grid-cols-2 gap-4">
+            {diseaseInfo?.recovery_chances && (
+              <div className="bg-card rounded-xl border border-border p-5">
+                <p className="font-bold mb-2">Recovery Chances</p>
+                <p className="text-sm text-muted-foreground">{diseaseInfo.recovery_chances}</p>
+              </div>
+            )}
+            {diseaseInfo?.recommended_fertilizer && (
+              <div className="bg-card rounded-xl border border-border p-5">
+                <p className="font-bold mb-2">Recommended Fertilizer</p>
+                <p className="text-sm text-muted-foreground">{diseaseInfo.recommended_fertilizer}</p>
+              </div>
+            )}
+            {diseaseInfo?.irrigation_suggestions && (
+              <div className="bg-card rounded-xl border border-border p-5">
+                <p className="font-bold mb-2">Irrigation Suggestions</p>
+                <p className="text-sm text-muted-foreground">{diseaseInfo.irrigation_suggestions}</p>
+              </div>
+            )}
+            {diseaseInfo?.next_monitoring_time && (
+              <div className="bg-card rounded-xl border border-border p-5">
+                <p className="font-bold mb-2">Next Monitoring Time</p>
+                <p className="text-sm text-muted-foreground">{diseaseInfo.next_monitoring_time}</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {diseaseInfo?.weather_risk_analysis && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.29 }}
+            className="bg-card rounded-2xl border border-border p-5">
+            <p className="font-bold mb-3">Weather Risk Analysis</p>
+            <div className="grid md:grid-cols-2 gap-3 text-sm text-muted-foreground">
+              <p>{diseaseInfo.weather_risk_analysis.humidity_risk}</p>
+              <p>{diseaseInfo.weather_risk_analysis.temperature_risk}</p>
+              <p>{diseaseInfo.weather_risk_analysis.rainfall_impact}</p>
+              <p>{diseaseInfo.weather_risk_analysis.disease_spread_probability}</p>
+              <p className="md:col-span-2 font-medium text-foreground">{diseaseInfo.weather_risk_analysis.recommendation}</p>
+            </div>
           </motion.div>
         )}
 

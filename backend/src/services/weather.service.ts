@@ -22,51 +22,54 @@ export interface WeatherData {
 function getOpenWeatherApiKey(): string {
   const apiKey = process.env.OPENWEATHER_API_KEY;
   if (!apiKey || apiKey === 'your_openweather_key_here') {
-    throw new Error('OPENWEATHER_API_KEY is not configured. This is optional - weather features will use mock data without it. Get a free key at https://openweathermap.org/api');
+    throw new Error('OPENWEATHER_API_KEY is not configured');
   }
   return apiKey;
 }
 
-// Fallback weather data when OpenWeather API is not available
-function getMockWeatherData(lat: number, lon: number): WeatherData {
-  const description = 'Partly cloudy with typical farm conditions';
-  const conditions = ['Scattered clouds', 'Overcast', 'Fair', 'Partly cloudy'];
-  const condition = conditions[Math.floor(Math.random() * conditions.length)];
-  const weatherIcons = ['01d', '02d', '03d', '04d'];
-  const icon = weatherIcons[Math.floor(Math.random() * weatherIcons.length)];
-  
-  // Default moderate weather risk
-  const temperature = 24;
-  const humidity = 65;
-  const rainfall = 0;
-  const windSpeedKmh = 12;
-  const rainProbability = 20;
-  const uvIndex = 5;
-
+function buildDiseaseRisk(data: {
+  humidity: number;
+  temperature: number;
+  rainfall: number;
+  rainProbability: number;
+  windSpeedKmh: number;
+  uvIndex: number;
+}) {
   let riskScore = 30;
-  const riskFactors: string[] = [
-    'Moderate humidity - monitor for fungal diseases',
-    'Temperature favorable for some pathogens',
-    'Regular scouting recommended',
-    'Current conditions suggests low disease pressure',
-  ];
+  const riskFactors: string[] = [];
+
+  if (data.humidity > 80) { riskScore += 30; riskFactors.push('High humidity (>80%) favors fungal diseases'); }
+  else if (data.humidity > 65) { riskScore += 15; riskFactors.push('Moderate humidity may encourage disease'); }
+  else riskFactors.push('Lower humidity reduces fungal pressure');
+
+  if (data.temperature >= 18 && data.temperature <= 25) { riskScore += 25; riskFactors.push('Temperature optimal for late blight and other cool-wet pathogens'); }
+  else if (data.temperature > 25 && data.temperature <= 30) { riskScore += 20; riskFactors.push('Temperature favors early blight and bacterial leaf diseases'); }
+  else riskFactors.push('Temperature is outside peak range for many leaf pathogens');
+
+  if (data.rainfall > 0 || data.rainProbability >= 60) {
+    riskScore += 20;
+    riskFactors.push('Rainfall or wet leaves can accelerate disease spread');
+  }
+  if (data.windSpeedKmh > 25) { riskScore += 10; riskFactors.push('High winds can spread spores across fields'); }
+  if (data.uvIndex < 3) { riskScore += 10; riskFactors.push('Low UV can support longer pathogen survival on leaves'); }
 
   return {
-    lat,
-    lon,
-    temperature,
-    humidity,
-    rainfall,
-    wind_speed: windSpeedKmh,
-    rain_probability: rainProbability,
-    uv_index: uvIndex,
-    description,
-    condition,
-    icon,
-    city: 'Your Farm',
-    disease_risk_score: riskScore,
+    disease_risk_score: Math.min(100, Math.max(0, riskScore)),
     risk_factors: riskFactors,
   };
+}
+
+function getWeatherDescription(code: number): { condition: string; description: string; icon: string } {
+  if (code === 0) return { condition: 'Clear', description: 'Clear sky', icon: '01d' };
+  if (code === 1 || code === 2) return { condition: 'Partly cloudy', description: 'Partly cloudy', icon: '02d' };
+  if (code === 3) return { condition: 'Overcast', description: 'Overcast', icon: '04d' };
+  if (code >= 45 && code <= 48) return { condition: 'Foggy', description: 'Foggy', icon: '50d' };
+  if (code >= 51 && code <= 67) return { condition: 'Drizzle', description: 'Light rain', icon: '09d' };
+  if (code >= 71 && code <= 77) return { condition: 'Snow', description: 'Snow', icon: '13d' };
+  if (code === 80 || code === 81 || code === 82) return { condition: 'Rain showers', description: 'Rain showers', icon: '09d' };
+  if (code >= 85 && code <= 86) return { condition: 'Snow showers', description: 'Snow showers', icon: '13d' };
+  if (code >= 90 && code <= 99) return { condition: 'Thunderstorm', description: 'Thunderstorm', icon: '11d' };
+  return { condition: 'Unknown', description: 'Unknown conditions', icon: '04d' };
 }
 
 export async function getCoordinatesByCity(city: string): Promise<{ lat: number; lon: number; resolvedCity: string }> {
@@ -92,9 +95,60 @@ export async function getCoordinatesByCity(city: string): Promise<{ lat: number;
 }
 
 export async function getWeatherRisk(lat: number, lon: number): Promise<WeatherData> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    throw new Error('Valid latitude and longitude are required for weather analysis');
+  }
+
   try {
-    // Use Open-Meteo API - completely FREE, no API key needed!
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,uv_index&timezone=auto`;
+    const apiKey = getOpenWeatherApiKey();
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+    const res = await axios.get(url, { timeout: 7000 });
+    const temperature = Number(res.data?.main?.temp);
+    const humidity = Number(res.data?.main?.humidity);
+    const windSpeedKmh = Number(res.data?.wind?.speed) * 3.6;
+    const rainfall = Number(res.data?.rain?.['1h'] || res.data?.rain?.['3h'] || 0);
+    const condition = String(res.data?.weather?.[0]?.main || 'Unknown');
+    const description = String(res.data?.weather?.[0]?.description || condition);
+    const icon = String(res.data?.weather?.[0]?.icon || '04d');
+
+    if (!Number.isFinite(temperature) || !Number.isFinite(humidity)) {
+      throw new Error('Incomplete weather payload from OpenWeather');
+    }
+
+    const risk = buildDiseaseRisk({
+      humidity,
+      temperature,
+      rainfall,
+      rainProbability: rainfall > 0 ? 80 : 10,
+      windSpeedKmh,
+      uvIndex: 5,
+    });
+
+    return {
+      lat,
+      lon,
+      temperature: Math.round(temperature),
+      humidity: Math.round(humidity),
+      rainfall: Math.round(rainfall * 10) / 10,
+      wind_speed: Math.round(windSpeedKmh),
+      rain_probability: rainfall > 0 ? 80 : 10,
+      uv_index: 5,
+      description,
+      condition,
+      icon,
+      city: String(res.data?.name || 'Your Farm'),
+      ...risk,
+    };
+  } catch (openWeatherErr) {
+    logger.info('OpenWeather unavailable; trying Open-Meteo live weather', {
+      err: openWeatherErr instanceof Error ? openWeatherErr.message : String(openWeatherErr),
+      lat,
+      lon,
+    });
+  }
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,uv_index,precipitation,rain&hourly=precipitation_probability&forecast_days=1&timezone=auto`;
     const res = await axios.get(url, { timeout: 7000 });
     const current = res.data.current;
 
@@ -103,67 +157,44 @@ export async function getWeatherRisk(lat: number, lon: number): Promise<WeatherD
     const windSpeedKmh = Number(current?.wind_speed_10m);
     const uvIndex = Number(current?.uv_index);
     const weatherCode = Number(current?.weather_code);
+    const rainfall = Number(current?.rain ?? current?.precipitation ?? 0);
+    const rainProbability = Array.isArray(res.data?.hourly?.precipitation_probability)
+      ? Math.max(...res.data.hourly.precipitation_probability.slice(0, 12).map((v: unknown) => Number(v) || 0))
+      : (rainfall > 0 ? 70 : 10);
 
     if (!Number.isFinite(temp) || !Number.isFinite(humidity)) {
       throw new Error('Incomplete weather payload from Open-Meteo');
     }
 
-    // WMO Weather Interpretation Codes
-    const getWeatherDescription = (code: number): { condition: string; description: string; icon: string } => {
-      if (code === 0) return { condition: 'Clear', description: 'Clear sky', icon: '01d' };
-      if (code === 1 || code === 2) return { condition: 'Partly cloudy', description: 'Partly cloudy', icon: '02d' };
-      if (code === 3) return { condition: 'Overcast', description: 'Overcast', icon: '04d' };
-      if (code >= 45 && code <= 48) return { condition: 'Foggy', description: 'Foggy', icon: '50d' };
-      if (code >= 51 && code <= 67) return { condition: 'Drizzle', description: 'Light rain', icon: '09d' };
-      if (code >= 71 && code <= 77) return { condition: 'Snow', description: 'Snow', icon: '13d' };
-      if (code === 80 || code === 81 || code === 82) return { condition: 'Rain showers', description: 'Rain showers', icon: '09d' };
-      if (code >= 85 && code <= 86) return { condition: 'Snow showers', description: 'Snow showers', icon: '13d' };
-      if (code >= 90 && code <= 99) return { condition: 'Thunderstorm', description: 'Thunderstorm', icon: '11d' };
-      return { condition: 'Unknown', description: 'Unknown conditions', icon: '04d' };
-    };
-
     const weather = getWeatherDescription(weatherCode);
-
-    // Disease risk calculation
-    let riskScore = 0;
-    const riskFactors: string[] = [];
-
-    if (humidity > 80) { riskScore += 30; riskFactors.push('High humidity (>80%) favors fungal diseases'); }
-    else if (humidity > 65) { riskScore += 15; riskFactors.push('Moderate humidity may encourage disease'); }
-
-    if (temp >= 18 && temp <= 25) { riskScore += 25; riskFactors.push('Temperature optimal for Late Blight'); }
-    else if (temp >= 25 && temp <= 30) { riskScore += 20; riskFactors.push('Temperature favors Early Blight'); }
-
-    if (weatherCode >= 51 && weatherCode <= 82) {
-      riskScore += 20;
-      riskFactors.push('Rainfall/moisture increases disease spread risk');
-    }
-    if (windSpeedKmh > 25) { riskScore += 10; riskFactors.push('High winds can spread spores across fields'); }
-    if (uvIndex < 3) { riskScore += 10; riskFactors.push('Low UV can support longer pathogen survival on leaves'); }
+    const risk = buildDiseaseRisk({
+      humidity,
+      temperature: temp,
+      rainfall,
+      rainProbability,
+      windSpeedKmh,
+      uvIndex,
+    });
 
     return {
       lat,
       lon,
       temperature: Math.round(temp),
       humidity: Math.round(humidity),
-      rainfall: 0,
+      rainfall: Math.round(rainfall * 10) / 10,
       wind_speed: Math.round(windSpeedKmh),
-      rain_probability: weatherCode >= 51 && weatherCode <= 82 ? 70 : 10,
+      rain_probability: Math.round(rainProbability),
       uv_index: Math.round(uvIndex * 10) / 10,
       description: weather.description,
       condition: weather.condition,
       icon: weather.icon,
       city: 'Your Farm',
-      disease_risk_score: Math.min(100, riskScore),
-      risk_factors: riskFactors.length > 0 ? riskFactors : ['Current conditions stable for crop monitoring'],
+      ...risk,
     };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.warn('Weather API failed', { err: errMsg, lat, lon });
-    
-    // Return mock data as fallback
-    logger.info('Returning mock weather data (Open-Meteo API unavailable)');
-    return getMockWeatherData(lat, lon);
+    throw new Error('Live weather data is unavailable. Check weather API/network configuration.');
   }
 }
 

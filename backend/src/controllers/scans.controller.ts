@@ -1,18 +1,19 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { query } from '../utils/database';
-import { analyzeImageWithAI } from '../services/ai.service';
+import { generateScanAnalysisWithAI, type AIAnalysisResult } from '../services/ai.service';
 import { generateAIDoctorRecommendations } from '../services/ai-doctor.service';
 import { predictWithML } from '../services/ml.service';
+import { getWeatherRisk, saveWeatherSnapshot } from '../services/weather.service';
+import type { WeatherData } from '../services/weather.service';
 import { calculateRegret, buildRegretTimeline } from '../services/regret.service';
 import { sendAlertToUser } from '../services/alert.service';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import logger from '../utils/logger';
 
-function normalizeCropName(value: string): string {
-  return (value || '').toLowerCase().replace(/[^a-z]/g, '');
-}
+const inFlightScanHashes = new Set<string>();
 
 // ✅ FIX: Clean disease names that include plant names (e.g., "Healthy Tomato" → "Healthy")
 function cleanDiseaseName(rawDiseaseName: string): string {
@@ -94,6 +95,9 @@ function buildFallbackAnalysisFromML(ml: NonNullable<Awaited<ReturnType<typeof p
   const projectedLoss = isHealthy
     ? 0
     : Math.round((ml.loss_per_acre_inr || 0) * Math.max(0.2, ml.confidence / 100));
+  const yieldLossPercent = isHealthy
+    ? 0
+    : Math.round(Math.min(85, Math.max(1, Number((ml as typeof ml & { yield_loss_percent?: number }).yield_loss_percent) || (severity === 'critical' ? 42 : severity === 'warning' ? 22 : 8))));
 
   const treatment = ml.disease_info?.treatment
     || ml.disease_info?.prevention
@@ -128,6 +132,7 @@ function buildFallbackAnalysisFromML(ml: NonNullable<Awaited<ReturnType<typeof p
     confidence: ml.confidence || 0,
     severity,
     potential_loss_inr: projectedLoss,
+    yield_loss_percent: yieldLossPercent,
     recommendation: lowConfidence ? lowConfidenceNote : treatment,
     regret_insight: lowConfidence
       ? 'Detection uncertain due to low confidence. Capture a better image to avoid wrong treatment decisions.'
@@ -139,6 +144,21 @@ function buildFallbackAnalysisFromML(ml: NonNullable<Awaited<ReturnType<typeof p
       spread_mechanism: spread,
       prevention: treatment,
       symptoms,
+      causes: spread ? [spread] : [],
+      organic_treatment: isHealthy ? 'No treatment needed. Keep field hygiene and balanced nutrition.' : 'Use approved bio-control or neem-based spray where locally recommended.',
+      chemical_treatment: isHealthy ? 'No chemical treatment needed.' : treatment,
+      prevention_tips: ml.disease_info?.prevention ? [ml.disease_info.prevention] : [],
+      recovery_chances: isHealthy ? 'Excellent with routine monitoring.' : 'Good if treatment starts early and infected leaves are removed.',
+      recommended_fertilizer: 'Use soil-test-based balanced NPK and avoid excess nitrogen during disease pressure.',
+      irrigation_suggestions: 'Water at soil level and avoid wet foliage overnight.',
+      weather_risk_analysis: {
+        humidity_risk: 'Live weather analysis unavailable for this fallback report.',
+        temperature_risk: 'Live weather analysis unavailable for this fallback report.',
+        rainfall_impact: 'Live weather analysis unavailable for this fallback report.',
+        disease_spread_probability: 'Not calculated without live weather.',
+        recommendation: 'Add farm coordinates to enable weather-aware recommendations.',
+      },
+      next_monitoring_time: isHealthy ? 'Scan again in 7 days' : 'Re-scan in 48 hours',
     },
     behavioral_triggers: {
       ...(ml.behavioral_triggers || {}),
@@ -193,27 +213,18 @@ function normalizeTreatmentSteps(
 
 export const createScan = async (req: AuthRequest, res: Response): Promise<void> => {
   const imagePath = req.file?.path;
+  let scanHashKey: string | null = null;
   try {
     if (!req.file) {
       res.status(400).json({ success: false, message: 'Image file is required' });
       return;
     }
 
-    const { crop_id, farm_id, crop_name } = req.body;
+    const farm_id = typeof req.body.farm_id === 'string' && req.body.farm_id.trim()
+      ? req.body.farm_id.trim()
+      : null;
     const imageUrl = `/uploads/${req.file.filename}`;
 
-    // ✅ FIX: Validate crop_id belongs to user
-    let linkedCropName = '';
-    if (crop_id) {
-      const linkedCrop = await query('SELECT name FROM crops WHERE id = $1 AND user_id = $2 LIMIT 1', [crop_id, req.user!.id]);
-      if (!linkedCrop.rows.length) {
-        res.status(403).json({ success: false, message: 'Crop not found or does not belong to this user' });
-        return;
-      }
-      linkedCropName = linkedCrop.rows[0]?.name || '';
-    }
-
-    // ✅ FIX: Validate farm_id belongs to user
     if (farm_id) {
       const linkedFarm = await query('SELECT id FROM farms WHERE id = $1 AND user_id = $2 LIMIT 1', [farm_id, req.user!.id]);
       if (!linkedFarm.rows.length) {
@@ -222,105 +233,159 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Run ML + AI in parallel for speed
-    const cropContextName = linkedCropName || crop_name || undefined;
+    const imageHash = crypto.createHash('sha256').update(fs.readFileSync(imagePath!)).digest('hex');
+    scanHashKey = `${req.user!.id}:${imageHash}`;
+    if (inFlightScanHashes.has(scanHashKey)) {
+      res.status(409).json({ success: false, message: 'This image is already being processed. Please wait for the current scan to finish.' });
+      return;
+    }
+    inFlightScanHashes.add(scanHashKey);
 
-    const [mlResult, aiResult] = await Promise.allSettled([
-      predictWithML(imagePath!),
-      analyzeImageWithAI(imagePath!, cropContextName),
-    ]);
-
-    const ai = aiResult.status === 'fulfilled' ? aiResult.value : null;
-    const ml = mlResult.status === 'fulfilled' ? mlResult.value : null;
-
-    if (!ml && !ai) {
-      res.status(503).json({ success: false, message: 'Disease detection services are temporarily unavailable. Please retry shortly.' });
+    const duplicate = await query(
+      `SELECT id FROM scans
+       WHERE user_id = $1
+         AND disease_info->>'image_sha256' = $2
+         AND created_at >= NOW() - INTERVAL '2 minutes'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [req.user!.id, imageHash]
+    );
+    if (duplicate.rows.length > 0) {
+      if (imagePath && fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+      res.status(409).json({
+        success: false,
+        message: 'Duplicate scan detected. Open the existing report instead of processing the same image again.',
+        data: { existing_scan_id: duplicate.rows[0].id },
+      });
       return;
     }
 
-    const analysis = ai || (ml ? buildFallbackAnalysisFromML(ml) : null);
-    if (!analysis) {
-      res.status(503).json({ success: false, message: 'Unable to analyze scan at the moment. Please retry shortly.' });
+    const ml = await predictWithML(imagePath!);
+    if (!ml) {
+      res.status(503).json({ success: false, message: 'ML disease detection is temporarily unavailable. Please retry shortly.' });
       return;
     }
 
-    // Merge ML confidence (more precise) with AI analysis (richer context)
-    const finalConfidence = ai && ml
-      ? Math.round((analysis.confidence * 0.55 + ml.confidence * 0.45) * 10) / 10
-      : analysis.confidence;
-    const source = ai && ml ? 'combined' : ai ? 'ai' : 'ml';
-    const hasCropContext = !!cropContextName;
-    const lowConfidenceUnlinked = !hasCropContext && finalConfidence < 60;
-
-    // Use ML disease name if available and confidence is high
-    const diseaseName = lowConfidenceUnlinked
-      ? 'Uncertain diagnosis'
-      : cleanDiseaseName((ml && ml.confidence > 75) ? ml.disease : analysis.disease_name);
-    let plantName = (analysis.plant_name || crop_name || (ml && ml.plant) || 'Unknown');
-
-    const expectedCrop = cropContextName || '';
-    const expectedNorm = normalizeCropName(expectedCrop);
-    const detectedNorm = normalizeCropName(plantName);
-
-    // If the farmer linked this scan to a crop, keep that crop as the canonical label.
-    if (expectedCrop) {
-      if (detectedNorm && expectedNorm !== detectedNorm) {
-        logger.info('Using linked crop context for scan plant label', {
-          detected: plantName,
-          provided: expectedCrop,
+    const geo = await resolveScanCoordinates(req.user!.id, farm_id, undefined);
+    let weather: WeatherData | null = null;
+    if (typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+      try {
+        weather = await getWeatherRisk(geo.latitude, geo.longitude);
+        saveWeatherSnapshot(req.user!.id, weather).catch(() => null);
+      } catch (weatherErr) {
+        logger.warn('Live weather unavailable for scan analysis', {
+          error: weatherErr instanceof Error ? weatherErr.message : String(weatherErr),
           user_id: req.user!.id,
         });
       }
-      plantName = expectedCrop;
-    } else if (lowConfidenceUnlinked) {
-      plantName = 'Crop uncertain';
     }
-    
-    // ✅ NEW FIX: If farmer explicitly provided crop_name or crop_id, TRUST IT (for low confidence)
-    // This solves: "I uploaded potato leaf but it says tomato"
-    if (!expectedCrop && !lowConfidenceUnlinked && expectedNorm && detectedNorm && expectedNorm !== detectedNorm) {
-      if (finalConfidence < 70) {
-        // Low confidence - trust the explicitly provided crop name
-        logger.warn('Crop mismatch with low confidence: using provided crop name', {
-          detected: plantName,
-          provided: expectedCrop,
-          confidence: finalConfidence,
-          user_id: req.user!.id
+
+    const uncertain = Boolean(
+      ml.requires_clearer_image
+      || ml.class_label === 'unknown'
+      || /unclear|unknown/i.test(ml.disease || '')
+    );
+
+    let analysis: AIAnalysisResult = buildFallbackAnalysisFromML(ml) as AIAnalysisResult;
+    if (uncertain) {
+      analysis = {
+        ...analysis,
+        disease_name: 'Image unclear',
+        plant_name: 'Unknown crop',
+        severity: 'info',
+        potential_loss_inr: 0,
+        yield_loss_percent: 0,
+        recommendation: ml.message || 'Image unclear. Upload a sharper close-up leaf photo in natural daylight.',
+        regret_insight: 'The scan was saved, but diagnosis is uncertain. Retake the photo before applying any treatment.',
+        treatment_steps: [
+          { step: 1, title: 'Retake leaf photo', description: 'Capture one leaf close-up in natural light with the diseased area in focus.', duration: 'Now' },
+        ],
+        disease_info: {
+          ...analysis.disease_info,
+          scientific_name: 'Unknown',
+          affected_crops: [],
+          spread_mechanism: 'Unknown',
+          prevention: 'No treatment recommended until a clearer image is uploaded.',
+          symptoms: [],
+          causes: ['Image confidence below production threshold'],
+          organic_treatment: 'Do not apply treatment from this unclear scan.',
+          chemical_treatment: 'Do not apply chemical treatment from this unclear scan.',
+          prevention_tips: ['Retake a clear close-up leaf image before treatment decisions.'],
+          recovery_chances: 'Unknown until disease is confidently detected.',
+          recommended_fertilizer: 'Not recommended from an unclear image.',
+          irrigation_suggestions: 'Maintain normal crop irrigation until a reliable diagnosis is available.',
+          weather_risk_analysis: weather ? {
+            humidity_risk: `${weather.humidity}% humidity from live weather.`,
+            temperature_risk: `${weather.temperature}°C from live weather.`,
+            rainfall_impact: `${weather.rainfall}mm rainfall, ${weather.rain_probability}% rain probability.`,
+            disease_spread_probability: `${weather.disease_risk_score}/100 weather risk, diagnosis still unclear.`,
+            recommendation: weather.risk_factors.join('; '),
+          } : analysis.disease_info.weather_risk_analysis,
+          next_monitoring_time: 'Retake image now',
+        },
+      };
+    } else {
+      try {
+        analysis = await generateScanAnalysisWithAI(ml, weather);
+      } catch (aiErr) {
+        logger.warn('AI analysis unavailable; using model-backed ML report', {
+          error: aiErr instanceof Error ? aiErr.message : String(aiErr),
+          user_id: req.user!.id,
         });
-        plantName = expectedCrop;
       }
     }
+
+    const finalConfidence = Math.round((ml.confidence || analysis.confidence || 0) * 10) / 10;
+    const diseaseName = uncertain ? 'Image unclear' : cleanDiseaseName(ml.disease || analysis.disease_name);
+    const plantName = uncertain ? 'Unknown crop' : (ml.plant || analysis.plant_name || 'Unknown crop');
+    const finalSeverity = ml.is_healthy ? 'healthy' : analysis.severity;
+    const potentialLossInr = Math.round(Number(analysis.potential_loss_inr) || 0);
+    const yieldLossPercent = Math.round(Number(analysis.yield_loss_percent) || Number((ml as typeof ml & { yield_loss_percent?: number }).yield_loss_percent) || 0);
+    const source = uncertain || analysis.ai_provider === 'ml' || !analysis.ai_provider ? 'ml' : 'combined';
 
     // Merge symptoms from both sources
     const symptoms = [
       ...(analysis.disease_info?.symptoms || []),
-      ...(ml?.disease_info?.symptoms || []),
+      ...(ml.disease_info?.symptoms || []),
     ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 6);
 
     const mergedDiseaseInfo = {
-      scientific_name: analysis.disease_info?.scientific_name || ml?.disease_info?.scientific_name || '',
+      scientific_name: analysis.disease_info?.scientific_name || ml.disease_info?.scientific_name || '',
       affected_crops: analysis.disease_info?.affected_crops || [],
-      spread_mechanism: analysis.disease_info?.spread_mechanism || ml?.disease_info?.spread_mechanism || '',
-      prevention: analysis.disease_info?.prevention || ml?.disease_info?.prevention || '',
+      spread_mechanism: analysis.disease_info?.spread_mechanism || ml.disease_info?.spread_mechanism || '',
+      prevention: analysis.disease_info?.prevention || ml.disease_info?.prevention || '',
       symptoms,
+      causes: analysis.disease_info?.causes || [],
+      organic_treatment: analysis.disease_info?.organic_treatment || '',
+      chemical_treatment: analysis.disease_info?.chemical_treatment || '',
+      prevention_tips: analysis.disease_info?.prevention_tips || [],
+      recovery_chances: analysis.disease_info?.recovery_chances || '',
+      recommended_fertilizer: analysis.disease_info?.recommended_fertilizer || '',
+      irrigation_suggestions: analysis.disease_info?.irrigation_suggestions || '',
+      weather_risk_analysis: analysis.disease_info?.weather_risk_analysis || null,
+      next_monitoring_time: analysis.disease_info?.next_monitoring_time || '',
+      yield_loss_percent: yieldLossPercent,
+      image_sha256: imageHash,
+      ai_provider: analysis.ai_provider || 'ml',
+      weather,
     };
 
     // Calculate Regret AI score
     const regretAnalysis = calculateRegret({
-      severity: analysis.severity,
-      potential_loss_inr: analysis.potential_loss_inr,
+      severity: finalSeverity,
+      potential_loss_inr: potentialLossInr,
       confidence: finalConfidence,
-      urgency_days: ml?.urgency_days,
+      urgency_days: ml.urgency_days,
       disease_name: diseaseName,
       crop_name: plantName,
     });
 
-    const regretTimeline = buildRegretTimeline(analysis.potential_loss_inr, ml?.urgency_days || 7);
+    const regretTimeline = buildRegretTimeline(potentialLossInr, ml.urgency_days || 7);
 
     // Build enriched behavioral triggers
     const behavioralTriggers = {
       ...(analysis.behavioral_triggers || {}),
-      ...(ml?.behavioral_triggers || {}),
+      ...(ml.behavioral_triggers || {}),
       regret_score: regretAnalysis.regret_score,
       urgency_level: regretAnalysis.urgency_level,
       emotional_message: regretAnalysis.emotional_message,
@@ -335,8 +400,8 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
     };
 
     const normalizedTreatmentSteps = normalizeTreatmentSteps(
-      (analysis.treatment_steps as Array<Record<string, unknown>> | undefined),
-      analysis.severity,
+      (analysis.treatment_steps as unknown as Array<Record<string, unknown>> | undefined),
+      finalSeverity,
       regretAnalysis.treatment_cost_inr
     );
 
@@ -349,30 +414,32 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
        RETURNING *`,
       [
         req.user!.id,
-        crop_id || null,
+        null,
         farm_id || null,
         imageUrl,
         req.file.filename,
         diseaseName,
         plantName,
         finalConfidence,
-        analysis.severity,
-        analysis.potential_loss_inr,
+        finalSeverity,
+        potentialLossInr,
         analysis.recommendation,
         analysis.regret_insight,
         JSON.stringify(normalizedTreatmentSteps),
         JSON.stringify({ ...mergedDiseaseInfo, behavioral_triggers: behavioralTriggers }),
-        ml ? JSON.stringify(ml) : null,
-        ai ? JSON.stringify({ ...ai, behavioral_triggers: behavioralTriggers }) : null,
+        JSON.stringify(ml),
+        analysis.ai_provider && analysis.ai_provider !== 'ml'
+          ? JSON.stringify({ ...analysis, behavioral_triggers: behavioralTriggers })
+          : null,
         source,
       ]
     );
 
     const scan = r.rows[0];
 
-    const reportSeverity = analysis.severity === 'critical'
+    const reportSeverity = finalSeverity === 'critical'
       ? 'high'
-      : analysis.severity === 'warning'
+      : finalSeverity === 'warning'
       ? 'medium'
       : 'low';
 
@@ -381,12 +448,12 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
     try {
       const reportInsert = await query(
         `INSERT INTO disease_reports
-           (user_id, crop_id, image_path, disease_name, confidence, treatment, severity, scan_id)
+          (user_id, crop_id, image_path, disease_name, confidence, treatment, severity, scan_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
          RETURNING id`,
         [
           req.user!.id,
-          crop_id || null,
+          null,
           imageUrl,
           diseaseName,
           finalConfidence,
@@ -403,14 +470,13 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
       });
     }
 
-    const geo = await resolveScanCoordinates(req.user!.id, farm_id, crop_id);
     const alertLat = geo.latitude ?? null;
     const alertLon = geo.longitude ?? null;
 
     // Auto-create alert for critical/warning
-    if (analysis.severity === 'critical' || analysis.severity === 'warning') {
-      const timeLeft = analysis.severity === 'critical' ? 7200 : 86400;
-      const preventable = Math.round(analysis.potential_loss_inr * 0.85);
+    if (!uncertain && (finalSeverity === 'critical' || finalSeverity === 'warning')) {
+      const timeLeft = finalSeverity === 'critical' ? 7200 : 86400;
+      const preventable = Math.round(potentialLossInr * 0.85);
       const alertRes = await query(
         `INSERT INTO alerts
            (user_id, crop_id, farm_id, scan_id, title, description, severity, type,
@@ -418,11 +484,11 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
          VALUES ($1,$2,$3,$4,$5,$6,$7,'disease',$8,$9,$10,$11,$12,$13,$14)
          RETURNING id`,
         [
-          req.user!.id, crop_id || null, farm_id || null, scan.id,
+          req.user!.id, null, farm_id || null, scan.id,
           `${diseaseName} Detected`,
           analysis.recommendation,
-          analysis.severity,
-          analysis.potential_loss_inr,
+          finalSeverity,
+          potentialLossInr,
           preventable,
           timeLeft,
           Math.round(finalConfidence),
@@ -439,20 +505,15 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
 
       const alertId = alertRes.rows[0]?.id;
 
-      if (crop_id) {
-        const healthDrop = analysis.severity === 'critical' ? 30 : 15;
-        await query(`UPDATE crops SET health_score = GREATEST(0, health_score - $1) WHERE id = $2`, [healthDrop, crop_id]);
-      }
-
       // Send alert notifications (SMS + Email + Push)
       try {
         const userRes = await query(`SELECT name, phone, email FROM users WHERE id = $1`, [req.user!.id]);
         if (userRes.rows.length > 0) {
           const user = userRes.rows[0];
           const alertMessage = {
-            title: `🚨 ${diseaseName} Detected`,
-            body: `Disease detected on your ${plantName} (${Math.round(finalConfidence)}% confidence). Potential loss: ₹${Math.round(analysis.potential_loss_inr)}. Open app to view treatment.`,
-            subject: `⚠️ Disease Alert: ${diseaseName} Detected`,
+            title: `${diseaseName} Detected`,
+            body: `Disease detected on your ${plantName} (${Math.round(finalConfidence)}% confidence). Potential loss: ₹${potentialLossInr}. Open app to view treatment.`,
+            subject: `Disease Alert: ${diseaseName} Detected`,
             phone: user.phone,
             email: user.email,
             pushTitle: `${diseaseName} Detected`,
@@ -495,7 +556,7 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
               [alertId, u.id, Math.round(parseFloat(u.distance_km) * 10) / 10]
             );
             const msg = {
-              title: '🚨 Nearby Disease Alert',
+              title: 'Nearby Disease Alert',
               body: `${diseaseName} detected within ${Math.round(u.distance_km)}km of your farm. Open AgroMind to view the map and take precautions.`,
               subject: `Nearby Disease Alert: ${diseaseName}`,
               phone: u.phone,
@@ -521,29 +582,34 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
         disease_info: mergedDiseaseInfo,
         treatment_steps: normalizedTreatmentSteps,
         behavioral_triggers: behavioralTriggers,
-        ml_confirmation: ml ? { disease: ml.disease, confidence: ml.confidence } : null,
+        ml_confirmation: { disease: ml.disease, confidence: ml.confidence, crop: ml.plant },
+        needs_clearer_image: uncertain,
+        weather,
       },
     });
 
-    generateAIDoctorRecommendations({
-      id: scan.id,
-      user_id: req.user!.id,
-      crop_id: crop_id || undefined,
-      plant_name: plantName,
-      disease_name: diseaseName,
-      severity: analysis.severity,
-      confidence: finalConfidence,
-      potential_loss: analysis.potential_loss_inr,
-      latitude: geo.latitude,
-      longitude: geo.longitude,
-      location: undefined,
-    }).catch(err => {
-      logger.error(`Failed to generate AI Doctor recommendations for scan ${scan.id}:`, err);
-    });
+    if (!uncertain) {
+      generateAIDoctorRecommendations({
+        id: scan.id,
+        user_id: req.user!.id,
+        plant_name: plantName,
+        disease_name: diseaseName,
+        severity: finalSeverity,
+        confidence: finalConfidence,
+        potential_loss: potentialLossInr,
+        latitude: geo.latitude,
+        longitude: geo.longitude,
+        location: undefined,
+      }).catch(err => {
+        logger.error(`Failed to generate AI Doctor recommendations for scan ${scan.id}:`, err);
+      });
+    }
   } catch (err) {
     logger.error('Scan error:', err);
     if (imagePath && fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
     res.status(500).json({ success: false, message: 'Scan failed. Please try again.' });
+  } finally {
+    if (scanHashKey) inFlightScanHashes.delete(scanHashKey);
   }
 };
 
@@ -579,15 +645,34 @@ export const getScanById = async (req: AuthRequest, res: Response): Promise<void
     if (!r.rows.length) { res.status(404).json({ success: false, message: 'Scan not found' }); return; }
 
     const scan = r.rows[0];
+    const reportR = await query(
+      `SELECT id FROM disease_reports WHERE scan_id = $1 AND user_id = $2 LIMIT 1`,
+      [scan.id, req.user!.id]
+    );
+    const diseaseInfo = scan.disease_info || {};
+    const behavioralTriggers = diseaseInfo.behavioral_triggers || {};
     // Recompute regret analysis from stored data
     const regretAnalysis = calculateRegret({
       severity: scan.severity,
       potential_loss_inr: parseFloat(scan.potential_loss) || 0,
       confidence: parseFloat(scan.confidence) || 0,
       disease_name: scan.disease_name,
+      crop_name: scan.plant_name,
     });
+    const regretTimeline = Array.isArray(behavioralTriggers.loss_timeline)
+      ? behavioralTriggers.loss_timeline
+      : buildRegretTimeline(parseFloat(scan.potential_loss) || 0, scan.severity === 'critical' ? 2 : scan.severity === 'warning' ? 7 : 14);
 
-    res.json({ success: true, data: { ...scan, regret_analysis: regretAnalysis } });
+    res.json({
+      success: true,
+      data: {
+        ...scan,
+        report_id: reportR.rows[0]?.id || null,
+        regret_analysis: regretAnalysis,
+        regret_timeline: regretTimeline,
+        behavioral_triggers: behavioralTriggers,
+      },
+    });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch scan' });
   }

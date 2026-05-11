@@ -51,7 +51,14 @@ export const getAlertStats = async (req: AuthRequest, res: Response): Promise<vo
       ),
     ]);
 
-    const crops = await query('SELECT COUNT(*) as count FROM crops WHERE user_id=$1', [req.user!.id]);
+    const crops = await query(
+      `SELECT COUNT(DISTINCT plant_name) as count
+       FROM scans
+       WHERE user_id=$1
+         AND plant_name IS NOT NULL
+         AND plant_name <> 'Unknown crop'`,
+      [req.user!.id]
+    );
     const totalReports = reportStats.rows[0]?.total_reports || 0;
     const healthyReports = reportStats.rows[0]?.healthy_reports || 0;
     const protectionRate = totalReports > 0

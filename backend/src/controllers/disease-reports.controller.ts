@@ -40,9 +40,16 @@ export const getReports = async (req: AuthRequest, res: Response): Promise<void>
 
     const [rowsResult, countResult] = await Promise.all([
       query(
-        `SELECT dr.id, dr.user_id, dr.crop_id, dr.image_path, dr.disease_name, dr.confidence,
-                dr.treatment, dr.severity, dr.created_at, c.name AS crop_name
+        `SELECT dr.id, dr.user_id, dr.crop_id, dr.scan_id, dr.image_path,
+                COALESCE(s.disease_name, dr.disease_name) AS disease_name,
+                COALESCE(s.confidence, dr.confidence) AS confidence,
+                COALESCE(s.recommendation, dr.treatment) AS treatment,
+                dr.severity, dr.created_at,
+                COALESCE(s.plant_name, c.name) AS crop_name,
+                s.plant_name, s.potential_loss, s.disease_info, s.treatment_steps,
+                s.regret_insight, s.status, s.image_url
          FROM disease_reports dr
+         LEFT JOIN scans s ON s.id = dr.scan_id
          LEFT JOIN crops c ON c.id = dr.crop_id
          ${where}
          ORDER BY dr.created_at DESC
@@ -72,9 +79,16 @@ export const getReportById = async (req: AuthRequest, res: Response): Promise<vo
     const reportId = req.params.id;
 
     const reportResult = await query(
-      `SELECT dr.id, dr.user_id, dr.crop_id, dr.image_path, dr.disease_name, dr.confidence,
-              dr.treatment, dr.severity, dr.created_at, c.name AS crop_name
+      `SELECT dr.id, dr.user_id, dr.crop_id, dr.scan_id, dr.image_path,
+              COALESCE(s.disease_name, dr.disease_name) AS disease_name,
+              COALESCE(s.confidence, dr.confidence) AS confidence,
+              COALESCE(s.recommendation, dr.treatment) AS treatment,
+              dr.severity, dr.created_at,
+              COALESCE(s.plant_name, c.name) AS crop_name,
+              s.plant_name, s.potential_loss, s.disease_info, s.treatment_steps,
+              s.regret_insight, s.status, s.image_url
        FROM disease_reports dr
+       LEFT JOIN scans s ON s.id = dr.scan_id
        LEFT JOIN crops c ON c.id = dr.crop_id
        WHERE dr.id = $1 AND dr.user_id = $2
        LIMIT 1`,
@@ -107,20 +121,32 @@ export const getContractDashboard = async (req: AuthRequest, res: Response): Pro
       query(
         `SELECT COUNT(*)::INT AS active_alerts
          FROM alerts
-         WHERE user_id = $1 AND COALESCE(is_active, NOT is_resolved) = true`,
+         WHERE user_id = $1 AND NOT is_resolved`,
         [uid]
       ),
       query(
-        `SELECT COUNT(DISTINCT crop_id)::INT AS crops_monitored
-         FROM disease_reports
-         WHERE user_id = $1 AND crop_id IS NOT NULL`,
+        `SELECT COUNT(DISTINCT COALESCE(s.plant_name, c.name))::INT AS crops_monitored
+         FROM disease_reports dr
+         LEFT JOIN scans s ON s.id = dr.scan_id
+         LEFT JOIN crops c ON c.id = dr.crop_id
+         WHERE dr.user_id = $1
+           AND COALESCE(s.plant_name, c.name) IS NOT NULL
+           AND COALESCE(s.plant_name, c.name) <> 'Unknown crop'`,
         [uid]
       ),
       query(
-        `SELECT id AS report_id, disease_name, confidence, severity, image_path, created_at
-         FROM disease_reports
-         WHERE user_id = $1
-         ORDER BY created_at DESC
+        `SELECT dr.id AS report_id, dr.scan_id,
+                COALESCE(s.disease_name, dr.disease_name) AS disease_name,
+                COALESCE(s.confidence, dr.confidence) AS confidence,
+                dr.severity,
+                COALESCE(s.image_url, dr.image_path) AS image_path,
+                COALESCE(s.plant_name, c.name) AS plant_name,
+                dr.created_at
+         FROM disease_reports dr
+         LEFT JOIN scans s ON s.id = dr.scan_id
+         LEFT JOIN crops c ON c.id = dr.crop_id
+         WHERE dr.user_id = $1
+         ORDER BY dr.created_at DESC
          LIMIT 10`,
         [uid]
       ),
@@ -152,7 +178,7 @@ export const getContractAlerts = async (req: AuthRequest, res: Response): Promis
     const limit = Math.min(Math.max(parseInt(String(req.query.limit || '20'), 10) || 20, 1), 100);
     const offset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
 
-    let where = 'WHERE a.user_id = $1 AND COALESCE(a.is_active, NOT a.is_resolved) = true';
+    let where = 'WHERE a.user_id = $1 AND NOT a.is_resolved';
     const params: Array<string | number> = [uid];
 
     if (req.query.severity) {
@@ -164,6 +190,7 @@ export const getContractAlerts = async (req: AuthRequest, res: Response): Promis
       `SELECT a.id,
               a.user_id,
               a.scan_id AS report_id,
+              a.scan_id,
               COALESCE(a.description, a.title) AS message,
               a.severity,
               COALESCE(a.is_active, NOT a.is_resolved) AS is_active,

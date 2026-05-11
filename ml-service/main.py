@@ -8,7 +8,7 @@ Features: LeafAI expertise, MobileNetV2 disease detection, leaf ID, symptom anal
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn, numpy as np, os, json, logging, io
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pathlib import Path
 
 # LeafAI Integration
@@ -50,10 +50,29 @@ DEFAULT_CLASS_LABELS = [
 
 CLASS_LABELS = []
 CLASS_INDEX_PATH = Path("models/class_indices.json")
+CONFIDENCE_THRESHOLD = float(os.getenv("ML_CONFIDENCE_THRESHOLD", "60"))
+MIN_IMAGE_EDGE = int(os.getenv("ML_MIN_IMAGE_EDGE", "96"))
+SUPPORTED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
+
+LABEL_ALIASES = {
+    "Pepper__bell___Bacterial_spot": "Pepper,_bell___Bacterial_spot",
+    "Pepper__bell___healthy": "Pepper,_bell___healthy",
+    "Tomato_Bacterial_spot": "Tomato___Bacterial_spot",
+    "Tomato_Early_blight": "Tomato___Early_blight",
+    "Tomato_Late_blight": "Tomato___Late_blight",
+    "Tomato_Leaf_Mold": "Tomato___Leaf_Mold",
+    "Tomato_Septoria_leaf_spot": "Tomato___Septoria_leaf_spot",
+    "Tomato_Spider_mites_Two_spotted_spider_mite": "Tomato___Spider_mites_Two-spotted_spider_mite",
+    "Tomato__Target_Spot": "Tomato___Target_Spot",
+    "Tomato__Tomato_YellowLeaf__Curl_Virus": "Tomato___Tomato_Yellow_Leaf_Curl_Virus",
+    "Tomato__Tomato_mosaic_virus": "Tomato___Tomato_mosaic_virus",
+    "Tomato_healthy": "Tomato___healthy",
+}
 
 
 def normalize_label(label: str) -> str:
-    return label.replace(" ", "_")
+    label = label.replace(" ", "_")
+    return LABEL_ALIASES.get(label, label)
 
 
 def load_class_labels() -> None:
@@ -130,12 +149,72 @@ def load_leafai():
         logger.error(f"LeafAI initialization failed: {e}")
         leaf_ai = None
 
-def preprocess(img_bytes: bytes):
-    img = Image.open(io.BytesIO(img_bytes)).convert("RGB").resize(IMG_SIZE, Image.LANCZOS)
+def validate_image(img_bytes: bytes, content_type: str | None) -> Image.Image:
+    if content_type not in SUPPORTED_MIME_TYPES:
+        raise HTTPException(400, "Unsupported image format. Upload JPEG, PNG, or WebP.")
+    try:
+        img = Image.open(io.BytesIO(img_bytes))
+        img.verify()
+        img = Image.open(io.BytesIO(img_bytes))
+        img = ImageOps.exif_transpose(img).convert("RGB")
+    except (UnidentifiedImageError, OSError) as exc:
+        raise HTTPException(400, "Invalid or corrupted image file") from exc
+
+    width, height = img.size
+    if width < MIN_IMAGE_EDGE or height < MIN_IMAGE_EDGE:
+        raise HTTPException(400, f"Image is too small. Minimum size is {MIN_IMAGE_EDGE}x{MIN_IMAGE_EDGE}px.")
+
+    arr = np.asarray(img, dtype=np.float32)
+    brightness = float(arr.mean())
+    contrast = float(arr.std())
+    if brightness < 20 or brightness > 238 or contrast < 8:
+        raise HTTPException(422, "Image quality is too poor for reliable diagnosis. Upload a clear, well-lit leaf photo.")
+
+    return img
+
+
+def cleanup_leaf_background(img: Image.Image) -> Image.Image:
+    try:
+        import cv2
+        arr = np.asarray(img)
+        hsv = cv2.cvtColor(arr, cv2.COLOR_RGB2HSV)
+        mask = cv2.inRange(hsv, np.array([25, 25, 25]), np.array([100, 255, 255]))
+        kernel = np.ones((5, 5), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        ys, xs = np.where(mask > 0)
+        leaf_ratio = len(xs) / max(1, arr.shape[0] * arr.shape[1])
+        if len(xs) > 0 and leaf_ratio >= 0.04:
+            x1, x2 = int(xs.min()), int(xs.max())
+            y1, y2 = int(ys.min()), int(ys.max())
+            pad = int(max(x2 - x1, y2 - y1) * 0.08)
+            x1 = max(0, x1 - pad)
+            y1 = max(0, y1 - pad)
+            x2 = min(arr.shape[1], x2 + pad)
+            y2 = min(arr.shape[0], y2 + pad)
+            return img.crop((x1, y1, x2, y2))
+    except Exception as exc:
+        logger.debug(f"Background cleanup skipped: {exc}")
+    return img
+
+
+def preprocess(img_bytes: bytes, content_type: str | None):
+    img = cleanup_leaf_background(validate_image(img_bytes, content_type))
+    img = img.resize(IMG_SIZE, Image.LANCZOS)
     arr = np.array(img, dtype=np.float32) / 255.0
     return np.expand_dims(arr, axis=0)
 
+
+def estimate_yield_loss_percent(severity: str, conf: float, loss_inr: int) -> int:
+    if severity == "healthy" or loss_inr <= 0:
+        return 0
+    severity_base = {"critical": 38, "warning": 20, "info": 8}.get(severity, 8)
+    confidence_factor = max(0.5, min(conf / 100, 1.0))
+    loss_factor = min(loss_inr / 60000, 1.0)
+    return int(round(min(85, max(1, severity_base * confidence_factor + loss_factor * 18))))
+
 def get_info(label: str) -> dict:
+    label = normalize_label(label)
     info = DISEASE_DB.get(label, DEFAULT_INFO).copy()
     if label not in DISEASE_DB:
         parts = label.split("___")
@@ -144,6 +223,10 @@ def get_info(label: str) -> dict:
         if "healthy" in label.lower():
             info["severity"] = "healthy"
             info["loss_per_acre_inr"] = 0
+    if "healthy" in label.lower():
+        info["severity"] = "healthy"
+        info["loss_per_acre_inr"] = 0
+        info["urgency_days"] = 14
     return info
 
 def regret_score(severity: str, loss: int, days: int, conf: float) -> dict:
@@ -171,6 +254,7 @@ def build_response(label, conf, info, rs, source, top5):
             "spread_mechanism": info["spread"], "treatment": info["treatment"], "prevention": info["prevention"],
         },
         "severity": info["severity"], "loss_per_acre_inr": info["loss_per_acre_inr"],
+        "yield_loss_percent": estimate_yield_loss_percent(info["severity"], conf, info["loss_per_acre_inr"]),
         "urgency_days": info["urgency_days"],
         "regret_ai": {"message": info["regret_message"], **rs},
         "top5_predictions": top5,
@@ -180,6 +264,47 @@ def build_response(label, conf, info, rs, source, top5):
             "treatment_cost_estimate_inr": round(info["loss_per_acre_inr"] * 0.08),
             "roi": f"Spend ₹{round(info['loss_per_acre_inr'] * 0.08):,} to save ₹{info['loss_per_acre_inr']:,}",
             "social_proof": "Farmers who act within 24h save 85% of preventable losses",
+        }
+    }
+
+
+def build_uncertain_response(conf, top5):
+    return {
+        "disease": "Image unclear",
+        "plant": "Unknown crop",
+        "class_label": "unknown",
+        "confidence": round(conf, 1),
+        "is_healthy": False,
+        "source": "model",
+        "requires_clearer_image": True,
+        "message": "Model confidence is below the production threshold. Upload a sharper, closer leaf image in natural light.",
+        "disease_info": {
+            "scientific_name": "Unknown",
+            "symptoms": [],
+            "spread_mechanism": "Unknown",
+            "treatment": "No treatment should be applied from this scan because the model is uncertain.",
+            "prevention": "Retake the photo with one leaf filling most of the frame.",
+        },
+        "severity": "info",
+        "loss_per_acre_inr": 0,
+        "yield_loss_percent": 0,
+        "urgency_days": 0,
+        "regret_ai": {
+            "message": "Diagnosis uncertain. A clearer image is required before treatment decisions.",
+            "score": 0,
+            "level": "uncertain",
+            "urgency": "Retake photo",
+            "daily_loss_inr": 0,
+            "weekly_loss_inr": 0,
+            "monthly_loss_inr": 0,
+        },
+        "top5_predictions": top5,
+        "behavioral_triggers": {
+            "loss_framing": "No loss estimate generated because diagnosis is uncertain.",
+            "urgency": "Retake photo before applying treatment.",
+            "treatment_cost_estimate_inr": 0,
+            "roi": "Not calculated for unclear image.",
+            "social_proof": "Clear close-up leaf images produce safer recommendations.",
         }
     }
 
@@ -229,8 +354,8 @@ async def leafai_identify(image: UploadFile = File(...), override_class: str = N
     if not LEAFAI_AVAILABLE or not leaf_ai:
         raise HTTPException(503, "LeafAI service not available")
     
-    if not image.content_type or not image.content_type.startswith("image/"):
-        raise HTTPException(400, "File must be an image")
+    if image.content_type not in SUPPORTED_MIME_TYPES:
+        raise HTTPException(400, "Unsupported image format. Upload JPEG, PNG, or WebP.")
     
     img_bytes = await image.read()
     if len(img_bytes) > 15 * 1024 * 1024:
@@ -241,7 +366,7 @@ async def leafai_identify(image: UploadFile = File(...), override_class: str = N
     
     try:
         import tensorflow as tf
-        arr = preprocess(img_bytes)
+        arr = preprocess(img_bytes, image.content_type)
         preds = model.predict(arr, verbose=0)[0]
         idx = int(np.argmax(preds))
         
@@ -389,15 +514,15 @@ def leafai_search(plant_name: str = None, min_confidence: float = 0.0):
 
 @app.post("/predict")
 async def predict(image: UploadFile = File(...)):
-    if not image.content_type or not image.content_type.startswith("image/"):
-        raise HTTPException(400, "File must be an image")
+    if image.content_type not in SUPPORTED_MIME_TYPES:
+        raise HTTPException(400, "Unsupported image format. Upload JPEG, PNG, or WebP.")
     img_bytes = await image.read()
     if len(img_bytes) > 15 * 1024 * 1024: raise HTTPException(400, "Image too large (max 15MB)")
     if model is None:
         raise HTTPException(503, "Model is not loaded. Train model and restart service.")
     try:
         import tensorflow as tf
-        arr = preprocess(img_bytes)
+        arr = preprocess(img_bytes, image.content_type)
         preds = model.predict(arr, verbose=0)[0]
         idx = int(np.argmax(preds))
         if idx >= len(CLASS_LABELS):
@@ -409,6 +534,8 @@ async def predict(image: UploadFile = File(...)):
             for i in np.argsort(preds)[::-1][:5]
             if i < len(CLASS_LABELS)
         ]
+        if conf < CONFIDENCE_THRESHOLD:
+            return build_uncertain_response(conf, top5)
         info = get_info(label)
         rs = regret_score(info["severity"], info["loss_per_acre_inr"], info["urgency_days"], conf)
         return build_response(label, conf, info, rs, "model", top5)

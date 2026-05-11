@@ -60,6 +60,10 @@ export interface TreatmentStep {
   title: string;
   description: string;
   duration: string;
+  product?: string;
+  dosage?: string;
+  urgency?: string;
+  estimated_cost_inr?: number;
 }
 
 export interface DiseaseInfo {
@@ -67,6 +71,24 @@ export interface DiseaseInfo {
   affected_crops: string[];
   spread_mechanism: string;
   prevention: string;
+  symptoms?: string[];
+  causes?: string[];
+  organic_treatment?: string;
+  chemical_treatment?: string;
+  prevention_tips?: string[];
+  recovery_chances?: string;
+  recommended_fertilizer?: string;
+  irrigation_suggestions?: string;
+  weather_risk_analysis?: {
+    humidity_risk: string;
+    temperature_risk: string;
+    rainfall_impact: string;
+    disease_spread_probability: string;
+    recommendation: string;
+  } | null;
+  next_monitoring_time?: string;
+  yield_loss_percent?: number;
+  behavioral_triggers?: Record<string, any>;
 }
 
 export interface Scan {
@@ -81,12 +103,15 @@ export interface Scan {
   confidence: number;
   severity: 'critical' | 'warning' | 'info' | 'healthy';
   potential_loss: number;
+  yield_loss_percent?: number;
   currency: string;
   recommendation: string;
   regret_insight: string;
   treatment_steps: TreatmentStep[];
   disease_info: DiseaseInfo;
   source?: 'ai' | 'combined' | 'ml';
+  ai_provider?: 'gemini' | 'ollama' | 'ml';
+  needs_clearer_image?: boolean;
   status: 'pending' | 'analyzed' | 'resolved' | 'ignored';
   crop_name?: string;
   farm_name?: string;
@@ -163,12 +188,20 @@ export interface DiseaseReport {
   id: string;
   user_id: string;
   crop_id?: string;
+  scan_id?: string;
   crop_name?: string;
+  plant_name?: string;
   image_path: string;
+  image_url?: string;
   disease_name: string;
   confidence: number;
   treatment: string;
   severity: 'low' | 'medium' | 'high';
+  potential_loss?: number;
+  regret_insight?: string;
+  status?: string;
+  disease_info?: DiseaseInfo;
+  treatment_steps?: TreatmentStep[];
   created_at: string;
 }
 
@@ -178,7 +211,9 @@ export interface ContractDashboard {
   protection_rate: number;
   recent_scans: Array<{
     report_id: string;
+    scan_id?: string;
     disease_name: string;
+    plant_name?: string;
     confidence: number;
     severity: 'low' | 'medium' | 'high';
     image_path?: string;

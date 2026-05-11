@@ -17,7 +17,14 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
                 COUNT(*) FILTER (WHERE severity='critical' AND NOT is_resolved) as critical
          FROM alerts WHERE user_id=$1`, [uid]
       ),
-      query(`SELECT COUNT(*) as count FROM crops WHERE user_id=$1`, [uid]),
+      query(
+        `SELECT COUNT(DISTINCT plant_name) as count
+         FROM scans
+         WHERE user_id=$1
+           AND plant_name IS NOT NULL
+           AND plant_name <> 'Unknown crop'`,
+        [uid]
+      ),
       query(
         `SELECT COUNT(*) as total,
                 COUNT(*) FILTER (WHERE disease_name = 'Healthy') as healthy
@@ -38,7 +45,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
     // Spec: protection_rate = (reports where disease = "Healthy" / total reports) * 100
     const protectionRate = totalScans > 0
       ? Math.round((healthyScans / totalScans) * 100)
-      : 100;
+      : 0;
 
     res.json({
       success: true,

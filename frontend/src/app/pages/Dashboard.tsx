@@ -164,7 +164,7 @@ export function Dashboard() {
           },
           {
             label: 'Protection Rate', icon: Shield, bg: '#E3F2FD', iconColor: '#1565C0',
-            value: statsLoading ? '...' : `${stats?.protection_rate || 94}%`,
+            value: statsLoading ? '...' : `${stats?.protection_rate ?? 0}%`,
             sub: 'last 30 days', valueColor: '#1565C0', delay: 0.4,
           },
         ].map(({ label, icon: Icon, bg, iconColor, value, sub, valueColor, delay }) => (
@@ -227,7 +227,7 @@ export function Dashboard() {
               <Shield className="w-8 h-8 text-white" />
             </div>
             <h3 className="text-2xl font-bold text-[#2E7D32] mb-2">All Clear!</h3>
-            <p className="text-muted-foreground">No active alerts — your crops are safe 🌱</p>
+            <p className="text-muted-foreground">No active disease alerts from recent scans.</p>
           </motion.div>
         ) : (
           <AnimatePresence>

@@ -7,8 +7,12 @@ export interface MLPrediction {
   disease: string;
   plant: string;
   confidence: number;
+  class_label?: string;
   severity?: 'critical' | 'warning' | 'info' | 'healthy';
   loss_per_acre_inr?: number;
+  yield_loss_percent?: number;
+  requires_clearer_image?: boolean;
+  message?: string;
   regret_ai?: {
     message?: string;
     score?: number;

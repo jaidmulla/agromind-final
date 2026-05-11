@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { Request } from 'express';
 
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
@@ -9,7 +10,7 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const unique = `${Date.now()}-${crypto.randomUUID()}`;
     cb(null, `scan-${unique}${path.extname(file.originalname)}`);
   },
 });

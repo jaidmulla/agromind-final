@@ -68,7 +68,7 @@ export function ContractDashboard() {
               return (
                 <button
                   key={scan.report_id}
-                  onClick={() => navigate(`/analysis/${scan.report_id}`)}
+                  onClick={() => navigate(scan.scan_id ? `/solution/${scan.scan_id}` : `/analysis/${scan.report_id}`)}
                   className="w-full text-left rounded-xl border border-border p-3 hover:bg-muted transition-colors"
                 >
                   <div className="flex items-center gap-3">
@@ -79,6 +79,7 @@ export function ContractDashboard() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{scan.disease_name}</p>
+                      {scan.plant_name && <p className="text-sm text-muted-foreground truncate">{scan.plant_name}</p>}
                       <p className="text-sm text-muted-foreground">Confidence: {Math.round(scan.confidence)}%</p>
                       <p className="text-xs text-muted-foreground">{new Date(scan.created_at).toLocaleString()}</p>
                     </div>

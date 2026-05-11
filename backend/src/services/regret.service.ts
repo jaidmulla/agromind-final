@@ -109,13 +109,20 @@ const EMOTIONAL_MESSAGES: Record<string, string[]> = {
   ],
 };
 
-const SOCIAL_PROOF_MESSAGES = [
-  "12 farmers near you resolved this issue today and saved their harvest.",
-  "Farmers who act within 24 hours save 85% more than those who wait 3 days.",
-  "Over 500 AgroMind users have resolved this exact issue successfully.",
-  "Your neighbouring farmer Amit prevented ₹34,000 loss by acting on this alert.",
-  "Community data shows early treatment reduces loss by 89% on average.",
-];
+function chooseMessage(messages: string[], seed: string): string {
+  const score = seed.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  return messages[score % messages.length] || messages[0];
+}
+
+function buildEvidenceNote(severity: RegretInput['severity'], diseaseName: string): string {
+  if (severity === 'critical') {
+    return `High-severity ${diseaseName} cases need immediate field action because spread can accelerate under favorable weather.`;
+  }
+  if (severity === 'warning') {
+    return `Early treatment for ${diseaseName} usually prevents escalation better than waiting for wider symptoms.`;
+  }
+  return `Close monitoring and prevention are appropriate while risk remains low.`;
+}
 
 export function calculateRegret(input: RegretInput): RegretAnalysis {
   const { severity, potential_loss_inr, confidence, urgency_days = 7, disease_name = 'disease', crop_name = 'crop' } = input;
@@ -125,9 +132,9 @@ export function calculateRegret(input: RegretInput): RegretAnalysis {
       regret_score: 0, urgency_level: 'safe', urgency_text: 'No action needed',
       time_to_act_hours: 0, daily_loss_inr: 0, weekly_loss_inr: 0, monthly_loss_inr: 0,
       treatment_cost_inr: 0, roi_multiplier: 0,
-      emotional_message: EMOTIONAL_MESSAGES.healthy[Math.floor(Math.random() * EMOTIONAL_MESSAGES.healthy.length)],
+      emotional_message: chooseMessage(EMOTIONAL_MESSAGES.healthy, `${crop_name}:${disease_name}:healthy`),
       financial_message: 'Your crop is healthy — no financial risk detected.',
-      social_proof: 'Healthy crops monitored by AgroMind stay healthy 94% of the season.',
+      social_proof: 'Routine monitoring helps catch visible symptoms before they spread.',
       action_button_text: 'Continue Monitoring',
       countdown_message: 'Next scan recommended in 7 days',
       loss_amount_inr: 0,
@@ -162,30 +169,30 @@ export function calculateRegret(input: RegretInput): RegretAnalysis {
   if (regret_score >= 75) {
     urgency_level = 'critical';
     urgency_text = `ACT NOW — You have less than ${Math.ceil(time_to_act_hours / 24)} day(s) before irreversible damage`;
-    action_button_text = '🚨 Treat Immediately';
+    action_button_text = 'Treat Immediately';
   } else if (regret_score >= 50) {
     urgency_level = 'high';
     urgency_text = `Act within ${urgency_days} days to prevent ₹${potential_loss_inr.toLocaleString('en-IN')} loss`;
-    action_button_text = '⚡ Start Treatment Plan';
+    action_button_text = 'Start Treatment Plan';
   } else if (regret_score >= 25) {
     urgency_level = 'medium';
     urgency_text = `Monitor closely — treatment recommended within ${urgency_days} days`;
-    action_button_text = '📋 View Treatment Plan';
+    action_button_text = 'View Treatment Plan';
   } else {
     urgency_level = 'low';
     urgency_text = 'Low risk detected — monitor regularly';
-    action_button_text = '👁️ Monitor Crop';
+    action_button_text = 'Monitor Crop';
   }
 
   // Messages
   const msgs = EMOTIONAL_MESSAGES[severity] || EMOTIONAL_MESSAGES.warning;
-  const emotional_message = msgs[Math.floor(Math.random() * msgs.length)];
+  const emotional_message = chooseMessage(msgs, `${severity}:${disease_name}:${crop_name}:${Math.round(potential_loss_inr)}`);
   const financial_message = `Every day of delay costs you ₹${Math.round(daily_loss).toLocaleString('en-IN')}. ` +
     `Treatment costs only ₹${treatment_cost.toLocaleString('en-IN')} — a ${roi_multiplier}x return on action.`;
-  const social_proof = SOCIAL_PROOF_MESSAGES[Math.floor(Math.random() * SOCIAL_PROOF_MESSAGES.length)];
+  const social_proof = buildEvidenceNote(severity, disease_name);
   const countdown_message = urgency_level === 'critical'
-    ? `⏰ Treatment window closes in ~${urgency_days * 24} hours`
-    : `📅 Optimal treatment window: next ${urgency_days} days`;
+    ? `Treatment window closes in about ${urgency_days * 24} hours`
+    : `Optimal treatment window: next ${urgency_days} days`;
 
   const impact = estimateRegretImpact(severity, potential_loss_inr, urgency_days);
 
