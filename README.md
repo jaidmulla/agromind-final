@@ -113,7 +113,7 @@ Edit `.env`, `backend/.env`, and `frontend/.env` with your values:
 
 ```bash
 # Create PostgreSQL database
-psql -U postgres -c "CREATE USER agromind_user WITH PASSWORD 'password123';"
+psql -U postgres -c "CREATE USER agromind_user WITH PASSWORD '*********';"
 psql -U postgres -c "CREATE DATABASE agromind_db OWNER agromind_user;"
 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE agromind_db TO agromind_user;"
 
