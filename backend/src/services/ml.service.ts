@@ -31,20 +31,50 @@ export interface MLPrediction {
   behavioral_triggers?: Record<string, unknown>;
 }
 
+const ML_MAX_RETRIES = 3;
+const ML_BASE_DELAY_MS = 1000;
+
+function isRetryableError(err: any): boolean {
+  const status = err?.response?.status;
+  if (status === 503 || status === 429 || status === 502) return true;
+  const code = err?.code;
+  if (code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'ECONNRESET') return true;
+  return false;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export async function predictWithML(imagePath: string): Promise<MLPrediction | null> {
-  try {
-    const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:5000';
-    const form = new FormData();
-    form.append('image', fs.createReadStream(imagePath));
+  const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 
-    const res = await axios.post(`${mlUrl}/predict`, form, {
-      headers: form.getHeaders(),
-      timeout: 30000,
-    });
+  for (let attempt = 1; attempt <= ML_MAX_RETRIES; attempt++) {
+    try {
+      const form = new FormData();
+      form.append('image', fs.createReadStream(imagePath));
 
-    return res.data as MLPrediction;
-  } catch (err) {
-    logger.warn('ML service unavailable', { err: String(err) });
-    return null;
+      const res = await axios.post(`${mlUrl}/predict`, form, {
+        headers: form.getHeaders(),
+        timeout: 30000,
+      });
+
+      return res.data as MLPrediction;
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const code = err?.code;
+
+      if (attempt < ML_MAX_RETRIES && isRetryableError(err)) {
+        const delay = ML_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        logger.warn(`ML service attempt ${attempt}/${ML_MAX_RETRIES} failed (status=${status}, code=${code}), retrying in ${delay}ms`);
+        await sleep(delay);
+        continue;
+      }
+
+      logger.warn(`ML service failed after ${attempt} attempt(s)`, { status, code, err: String(err) });
+      return null;
+    }
   }
+
+  return null;
 }

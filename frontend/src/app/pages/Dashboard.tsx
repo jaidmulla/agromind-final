@@ -1,9 +1,9 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertTriangle, Leaf, Shield, TrendingDown, MapPin, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Leaf, Shield, TrendingDown, MapPin, RefreshCw, Camera, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useDashboardStats, useAlerts, useResolveAlert, useNearbyAlerts } from '../../hooks';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Alert } from '../../types';
+import type { Alert, RecentScan } from '../../types';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || '';
 
@@ -249,7 +249,93 @@ export function Dashboard() {
         )}
       </div>
 
-      {/* Quick Actions Banner */}
+      {/* Recent Scans */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold">Recent Scans</h2>
+          <button onClick={() => navigate('/scan')}
+            className="flex items-center gap-2 text-sm font-semibold text-[#2E7D32] hover:underline">
+            <Camera className="w-4 h-4" /> New Scan
+          </button>
+        </div>
+
+        {statsLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="rounded-xl border border-border p-4 animate-pulse flex gap-4">
+                <div className="w-14 h-14 bg-muted rounded-lg flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="h-4 bg-muted rounded w-1/3 mb-2" />
+                  <div className="h-3 bg-muted rounded w-2/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (stats?.recent_scans?.length || 0) === 0 ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="bg-card rounded-xl p-8 text-center border border-border">
+            <Camera className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground">No scans yet. Upload your first leaf image to get started.</p>
+            <button onClick={() => navigate('/scan')}
+              className="mt-4 bg-[#2E7D32] text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-[#1B5E20] transition-all">
+              Start AI Scan
+            </button>
+          </motion.div>
+        ) : (
+          <div className="space-y-3">
+            {(stats?.recent_scans || []).map((scan: RecentScan, index: number) => {
+              const sc = severityColor(scan.severity);
+              return (
+                <motion.div key={scan.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  onClick={() => navigate(`/solution/${scan.id}`)}
+                  className="bg-card rounded-xl border border-border p-4 flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-[#2E7D32]/40 transition-all">
+                  {/* Thumbnail */}
+                  {scan.image_url ? (
+                    <img
+                      src={`${BACKEND_URL}${scan.image_url}`}
+                      alt={scan.disease_name}
+                      className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-border"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                      <Leaf className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-bold truncate">{scan.disease_name}</h4>
+                      <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full text-white flex-shrink-0"
+                        style={{ backgroundColor: sc.dot }}>
+                        {scan.severity}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {scan.plant_name}
+                    </p>
+                  </div>
+
+                  {/* Confidence + Time */}
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-lg font-bold" style={{ color: sc.text, fontFamily: 'monospace' }}>
+                      {Math.round(scan.confidence)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
+                      <Clock className="w-3 h-3" />
+                      {new Date(scan.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
         className="bg-gradient-to-r from-[#2E7D32] to-[#1B5E20] rounded-xl p-8 text-white">
         <h3 className="text-2xl font-bold mb-2">Protect Your Harvest Before It's Too Late</h3>

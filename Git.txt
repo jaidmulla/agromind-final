@@ -2,3 +2,6 @@ git commit -m "your message"
 git push
 
 git push origin main
+
+
+git add . && git commit -m "update" && git push

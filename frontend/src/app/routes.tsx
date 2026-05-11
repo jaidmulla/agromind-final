@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router';
 import { RootLayout } from './layouts/RootLayout';
-import { Dashboard } from './pages/Dashboard';
+import { ContractDashboard } from './pages/ContractDashboard';
 import { Scan } from './pages/Scan';
 import { Community } from './pages/Community';
 import { Analytics } from './pages/Analytics';
@@ -18,6 +18,8 @@ import { AIDoctorPage } from './pages/AIDoctorPage';
 import { AIDoctorTasksDashboard } from './pages/AIDoctorTasksDashboard';
 import { BeforeAfterSimulation } from './pages/BeforeAfterSimulation';
 import LossPreventionDashboard from './pages/LossPreventionDashboard';
+import { Analysis } from './pages/Analysis';
+import { Treatment } from './pages/Treatment';
 import { useAuth } from '../contexts/AuthContext';
 
 function ProtectedRoute() {
@@ -54,9 +56,12 @@ export const router = createBrowserRouter([
         path: '/',
         Component: RootLayout,
         children: [
-          { index: true, Component: Dashboard },
-          { path: 'dashboard', Component: Dashboard },
+          { index: true, Component: ContractDashboard },
+          { path: 'dashboard', Component: ContractDashboard },
           { path: 'scan', Component: Scan },
+          { path: 'upload', Component: Scan },
+          { path: 'analysis/:reportId', Component: Analysis },
+          { path: 'treatment/:reportId', Component: Treatment },
           { path: 'result', element: <Navigate to="/explain" replace /> },
           { path: 'prediction', element: <Navigate to="/simulation" replace /> },
           { path: 'solution', element: <Navigate to="/scan" replace /> },

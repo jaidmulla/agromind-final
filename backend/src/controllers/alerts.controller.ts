@@ -25,7 +25,7 @@ export const getAlerts = async (req: AuthRequest, res: Response): Promise<void> 
 
 export const getAlertStats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [alertStats, lossStats] = await Promise.all([
+    const [alertStats, lossStats, reportStats] = await Promise.all([
       query(
         `SELECT
            COUNT(*) FILTER (WHERE NOT is_resolved) as total,
@@ -42,9 +42,21 @@ export const getAlertStats = async (req: AuthRequest, res: Response): Promise<vo
          FROM loss_prevention_records WHERE user_id = $1`,
         [req.user!.id]
       ),
+      query(
+        `SELECT COUNT(*)::INT AS total_reports,
+                COUNT(*) FILTER (WHERE disease_name = 'Healthy')::INT AS healthy_reports
+         FROM scans
+         WHERE user_id = $1`,
+        [req.user!.id]
+      ),
     ]);
 
     const crops = await query('SELECT COUNT(*) as count FROM crops WHERE user_id=$1', [req.user!.id]);
+    const totalReports = reportStats.rows[0]?.total_reports || 0;
+    const healthyReports = reportStats.rows[0]?.healthy_reports || 0;
+    const protectionRate = totalReports > 0
+      ? Math.round((healthyReports / totalReports) * 100)
+      : 0;
 
     res.json({
       success: true,
@@ -53,7 +65,7 @@ export const getAlertStats = async (req: AuthRequest, res: Response): Promise<vo
         total_loss_prevented: parseFloat(lossStats.rows[0].total_loss_prevented),
         today_prevented: parseFloat(lossStats.rows[0].today_prevented),
         crops_monitored: parseInt(crops.rows[0].count),
-        protection_rate: 94,
+        protection_rate: protectionRate,
         currency: 'INR',
       },
     });
@@ -75,7 +87,7 @@ export const resolveAlert = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const { action_taken, amount_prevented } = req.body;
     const r = await query(
-      `UPDATE alerts SET is_resolved=true, is_read=true, resolved_at=NOW()
+      `UPDATE alerts SET is_resolved=true, is_active=false, is_read=true, resolved_at=NOW()
        WHERE id=$1 AND user_id=$2 RETURNING *`,
       [req.params.id, req.user!.id]
     );

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { alertsApi, analyticsApi, scansApi, communityApi, farmsApi, cropsApi, settingsApi, authApi } from '../services/api';
+import { alertsApi, analyticsApi, scansApi, communityApi, farmsApi, cropsApi, settingsApi, authApi, diseaseDetectionApi } from '../services/api';
 import { toast } from 'sonner';
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -7,8 +7,8 @@ export function useDashboardStats() {
   return useQuery({
     queryKey: ['dashboard'],
     queryFn: analyticsApi.dashboard,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
   });
 }
 
@@ -17,8 +17,8 @@ export function useAlerts(params?: { severity?: string; is_resolved?: boolean; l
   return useQuery({
     queryKey: ['alerts', params],
     queryFn: () => alertsApi.list(params),
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
   });
 }
 
@@ -86,13 +86,52 @@ export function useScan(id: string | undefined) {
 export function useCreateScan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (formData: FormData) => scansApi.create(formData),
+    mutationFn: (formData: FormData) => diseaseDetectionApi.scan(formData),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['scans'] });
+      qc.invalidateQueries({ queryKey: ['report'] });
       qc.invalidateQueries({ queryKey: ['alerts'] });
+      qc.invalidateQueries({ queryKey: ['contract-dashboard'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (err: Error) => toast.error(err.message || 'Scan failed'),
+  });
+}
+
+export function useReport(id: string | undefined) {
+  return useQuery({
+    queryKey: ['report', id],
+    queryFn: () => diseaseDetectionApi.reportById(id!),
+    enabled: !!id,
+    staleTime: 15_000,
+  });
+}
+
+export function useContractDashboard() {
+  return useQuery({
+    queryKey: ['contract-dashboard'],
+    queryFn: diseaseDetectionApi.dashboard,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
+}
+
+export function useContractAlerts() {
+  return useQuery({
+    queryKey: ['contract-alerts'],
+    queryFn: async () => {
+      const raw = await alertsApi.list({ is_resolved: false, limit: 20 });
+      return raw.map((a) => ({
+        id: a.id,
+        report_id: a.scan_id,
+        message: a.description || a.title,
+        severity: (a.severity === 'critical' ? 'high' : a.severity === 'warning' ? 'medium' : 'low') as 'low' | 'medium' | 'high',
+        is_active: !a.is_resolved,
+        created_at: a.created_at,
+      }));
+    },
+    refetchInterval: 10_000,
+    staleTime: 5_000,
   });
 }
 

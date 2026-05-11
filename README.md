@@ -167,6 +167,59 @@ Password: password123
 
 ---
 
+## 🔁 End-to-End Workflow
+
+This is the intended app flow across frontend, backend, and ML services:
+
+1. User opens the frontend at `http://localhost` or `http://localhost:5173`.
+2. Frontend authenticates through `POST /api/v1/auth/login` and stores the JWT.
+3. Dashboard loads live data from the shared API layer:
+  - `GET /api/v1/analytics/dashboard`
+  - `GET /api/v1/alerts`
+  - `GET /api/v1/scans`
+  - `GET /api/v1/farms`
+  - `GET /api/v1/crops`
+4. Leaf scan flow:
+  - Frontend uploads an image through `POST /api/v1/scans`.
+  - Backend runs OpenAI analysis and ML inference in parallel.
+  - Backend calls the ML service at `POST /predict` internally.
+  - Backend merges results, stores the scan, creates alerts, and returns treatment steps.
+5. Treatment workflow:
+  - Frontend opens `/solution/:id` with the scan result.
+  - User reviews the regret score, loss timeline, and treatment plan.
+  - `PUT /api/v1/scans/:id/resolve` records completion.
+6. AI Doctor flow:
+  - Frontend sends chat messages to `POST /api/v1/chat`.
+  - Image-based diagnosis uses `POST /api/v1/chat/analyze-image`.
+  - Backend uses the local AI doctor for Hindi/Marathi and OpenAI for English.
+7. Supporting modules:
+  - Weather and map views use `GET /api/v1/analytics/weather-risk`, `GET /api/v1/alerts/heatmap`, and `GET /api/v1/farms/nearby`.
+  - Community, schemes, settings, and notifications all use the same `/api/v1` prefix.
+
+### Service Map
+
+| Layer | Responsibility |
+|---|---|
+| Frontend | UI, routing, auth session, upload forms, dashboards, and treatment views |
+| Backend | Auth, scans, alerts, analytics, chat, community, settings, and orchestration |
+| ML service | CNN disease prediction, LeafAI endpoints, fallback heuristic analysis |
+| Nginx | Reverse proxy for `/`, `/api/`, `/uploads/`, and `/ml/` |
+
+### Core API Groups
+
+| Group | Main Endpoints |
+|---|---|
+| Auth | `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/me` |
+| Scans | `/api/v1/scans`, `/api/v1/scans/:id`, `/api/v1/scans/:id/resolve` |
+| Alerts | `/api/v1/alerts`, `/api/v1/alerts/stats`, `/api/v1/alerts/heatmap` |
+| Analytics | `/api/v1/analytics/dashboard`, `/api/v1/analytics/weather-risk` |
+| AI Doctor | `/api/v1/chat`, `/api/v1/chat/analyze-image`, `/api/v1/ai-doctor/dashboard` |
+| Community | `/api/v1/community/posts`, `/api/v1/community/map` |
+| Farms & Crops | `/api/v1/farms`, `/api/v1/crops` |
+| Settings | `/api/v1/settings/notifications` |
+
+---
+
 ## 🐳 Docker Deployment (Recommended for Production)
 
 ```bash

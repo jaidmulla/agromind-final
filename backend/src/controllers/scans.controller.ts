@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { query } from '../utils/database';
 import { analyzeImageWithAI } from '../services/ai.service';
+import { generateAIDoctorRecommendations } from '../services/ai-doctor.service';
 import { predictWithML } from '../services/ml.service';
 import { calculateRegret, buildRegretTimeline } from '../services/regret.service';
 import { sendAlertToUser } from '../services/alert.service';
@@ -49,6 +50,40 @@ function cleanDiseaseName(rawDiseaseName: string): string {
   return cleaned || 'Healthy';
 }
 
+async function resolveScanCoordinates(
+  userId: string,
+  farmId: string | undefined | null,
+  cropId: string | undefined | null
+): Promise<{ latitude: number | undefined; longitude: number | undefined }> {
+  let lat: number | null = null;
+  let lon: number | null = null;
+  if (farmId) {
+    const farmR = await query(
+      `SELECT latitude, longitude FROM farms WHERE id=$1 AND user_id=$2`,
+      [farmId, userId]
+    );
+    lat = Number(farmR.rows[0]?.latitude);
+    lon = Number(farmR.rows[0]?.longitude);
+  } else if (cropId) {
+    const cropR = await query(
+      `SELECT f.latitude, f.longitude
+       FROM crops c LEFT JOIN farms f ON f.id=c.farm_id
+       WHERE c.id=$1 AND c.user_id=$2`,
+      [cropId, userId]
+    );
+    lat = Number(cropR.rows[0]?.latitude);
+    lon = Number(cropR.rows[0]?.longitude);
+  }
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    const userLoc = await query('SELECT latitude, longitude FROM users WHERE id=$1', [userId]);
+    lat = Number(userLoc.rows[0]?.latitude);
+    lon = Number(userLoc.rows[0]?.longitude);
+  }
+  return {
+    latitude: typeof lat === 'number' && Number.isFinite(lat) ? lat : undefined,
+    longitude: typeof lon === 'number' && Number.isFinite(lon) ? lon : undefined,
+  };
+}
 
 function buildFallbackAnalysisFromML(ml: NonNullable<Awaited<ReturnType<typeof predictWithML>>>) {
   const isHealthy = ml.is_healthy || /healthy/i.test(ml.disease || '');
@@ -188,9 +223,11 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     // Run ML + AI in parallel for speed
+    const cropContextName = linkedCropName || crop_name || undefined;
+
     const [mlResult, aiResult] = await Promise.allSettled([
       predictWithML(imagePath!),
-      analyzeImageWithAI(imagePath!),
+      analyzeImageWithAI(imagePath!, cropContextName),
     ]);
 
     const ai = aiResult.status === 'fulfilled' ? aiResult.value : null;
@@ -212,20 +249,36 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
       ? Math.round((analysis.confidence * 0.55 + ml.confidence * 0.45) * 10) / 10
       : analysis.confidence;
     const source = ai && ml ? 'combined' : ai ? 'ai' : 'ml';
+    const hasCropContext = !!cropContextName;
+    const lowConfidenceUnlinked = !hasCropContext && finalConfidence < 60;
 
     // Use ML disease name if available and confidence is high
-    const diseaseName = cleanDiseaseName(
-      (ml && ml.confidence > 75) ? ml.disease : analysis.disease_name
-    );
-    let plantName = (ml && ml.plant) ? ml.plant : (analysis.plant_name || crop_name || 'Unknown');
+    const diseaseName = lowConfidenceUnlinked
+      ? 'Uncertain diagnosis'
+      : cleanDiseaseName((ml && ml.confidence > 75) ? ml.disease : analysis.disease_name);
+    let plantName = (analysis.plant_name || crop_name || (ml && ml.plant) || 'Unknown');
 
-    const expectedCrop = linkedCropName || crop_name || '';
+    const expectedCrop = cropContextName || '';
     const expectedNorm = normalizeCropName(expectedCrop);
     const detectedNorm = normalizeCropName(plantName);
+
+    // If the farmer linked this scan to a crop, keep that crop as the canonical label.
+    if (expectedCrop) {
+      if (detectedNorm && expectedNorm !== detectedNorm) {
+        logger.info('Using linked crop context for scan plant label', {
+          detected: plantName,
+          provided: expectedCrop,
+          user_id: req.user!.id,
+        });
+      }
+      plantName = expectedCrop;
+    } else if (lowConfidenceUnlinked) {
+      plantName = 'Crop uncertain';
+    }
     
     // ✅ NEW FIX: If farmer explicitly provided crop_name or crop_id, TRUST IT (for low confidence)
     // This solves: "I uploaded potato leaf but it says tomato"
-    if (expectedNorm && detectedNorm && expectedNorm !== detectedNorm) {
+    if (!expectedCrop && !lowConfidenceUnlinked && expectedNorm && detectedNorm && expectedNorm !== detectedNorm) {
       if (finalConfidence < 70) {
         // Low confidence - trust the explicitly provided crop name
         logger.warn('Crop mismatch with low confidence: using provided crop name', {
@@ -317,35 +370,47 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
 
     const scan = r.rows[0];
 
+    const reportSeverity = analysis.severity === 'critical'
+      ? 'high'
+      : analysis.severity === 'warning'
+      ? 'medium'
+      : 'low';
+
+    // Keep contract table in sync: every scan creates one disease report row.
+    let reportId: string | null = null;
+    try {
+      const reportInsert = await query(
+        `INSERT INTO disease_reports
+           (user_id, crop_id, image_path, disease_name, confidence, treatment, severity, scan_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING id`,
+        [
+          req.user!.id,
+          crop_id || null,
+          imageUrl,
+          diseaseName,
+          finalConfidence,
+          analysis.recommendation,
+          reportSeverity,
+          scan.id,
+        ]
+      );
+      reportId = reportInsert.rows[0]?.id || null;
+    } catch (reportErr) {
+      logger.warn('Failed to mirror scan into disease_reports table', {
+        error: reportErr instanceof Error ? reportErr.message : String(reportErr),
+        scan_id: scan.id,
+      });
+    }
+
+    const geo = await resolveScanCoordinates(req.user!.id, farm_id, crop_id);
+    const alertLat = geo.latitude ?? null;
+    const alertLon = geo.longitude ?? null;
+
     // Auto-create alert for critical/warning
     if (analysis.severity === 'critical' || analysis.severity === 'warning') {
       const timeLeft = analysis.severity === 'critical' ? 7200 : 86400;
       const preventable = Math.round(analysis.potential_loss_inr * 0.85);
-      // Resolve alert geo coordinates (farm -> crop -> user fallback)
-      let alertLat: number | null = null;
-      let alertLon: number | null = null;
-      if (farm_id) {
-        const farmR = await query(
-          `SELECT latitude, longitude FROM farms WHERE id=$1 AND user_id=$2`,
-          [farm_id, req.user!.id]
-        );
-        alertLat = Number(farmR.rows[0]?.latitude);
-        alertLon = Number(farmR.rows[0]?.longitude);
-      } else if (crop_id) {
-        const cropR = await query(
-          `SELECT f.latitude, f.longitude
-           FROM crops c LEFT JOIN farms f ON f.id=c.farm_id
-           WHERE c.id=$1 AND c.user_id=$2`,
-          [crop_id, req.user!.id]
-        );
-        alertLat = Number(cropR.rows[0]?.latitude);
-        alertLon = Number(cropR.rows[0]?.longitude);
-      }
-      if (!Number.isFinite(alertLat) || !Number.isFinite(alertLon)) {
-        const userLoc = await query('SELECT latitude, longitude FROM users WHERE id=$1', [req.user!.id]);
-        alertLat = Number(userLoc.rows[0]?.latitude);
-        alertLon = Number(userLoc.rows[0]?.longitude);
-      }
       const alertRes = await query(
         `INSERT INTO alerts
            (user_id, crop_id, farm_id, scan_id, title, description, severity, type,
@@ -450,6 +515,7 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
       success: true,
       data: {
         ...scan,
+        report_id: reportId,
         regret_analysis: regretAnalysis,
         regret_timeline: regretTimeline,
         disease_info: mergedDiseaseInfo,
@@ -459,27 +525,21 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
       },
     });
 
-    // ✅ FIX: TRIGGER AI DOCTOR TASK GENERATION IMMEDIATELY (async, non-blocking)
-    try {
-      const { generateAIDoctorRecommendations } = await import('../services/ai-doctor.service');
-      generateAIDoctorRecommendations({
-        id: scan.id,
-        user_id: req.user!.id,
-        crop_id: crop_id || undefined,
-        plant_name: plantName,
-        disease_name: diseaseName,
-        severity: analysis.severity,
-        confidence: finalConfidence,
-        potential_loss: analysis.potential_loss_inr,
-        latitude: undefined, // Will use user's default location
-        longitude: undefined,
-        location: undefined,
-      }).catch(err => {
-        logger.error(`Failed to generate AI Doctor recommendations for scan ${scan.id}:`, err);
-      });
-    } catch (err) {
-      logger.warn('AI Doctor generation not queued (non-critical):', err);
-    }
+    generateAIDoctorRecommendations({
+      id: scan.id,
+      user_id: req.user!.id,
+      crop_id: crop_id || undefined,
+      plant_name: plantName,
+      disease_name: diseaseName,
+      severity: analysis.severity,
+      confidence: finalConfidence,
+      potential_loss: analysis.potential_loss_inr,
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      location: undefined,
+    }).catch(err => {
+      logger.error(`Failed to generate AI Doctor recommendations for scan ${scan.id}:`, err);
+    });
   } catch (err) {
     logger.error('Scan error:', err);
     if (imagePath && fs.existsSync(imagePath)) fs.unlinkSync(imagePath);

@@ -56,6 +56,11 @@ const SQL_STATEMENTS = [
     updated_at TIMESTAMPTZ DEFAULT NOW()
   )`,
 
+  // Contract compatibility columns
+  `ALTER TABLE crops ADD COLUMN IF NOT EXISTS crop_type VARCHAR(100)`,
+  `ALTER TABLE crops ADD COLUMN IF NOT EXISTS location VARCHAR(255)`,
+  `UPDATE crops SET crop_type = COALESCE(crop_type, name) WHERE crop_type IS NULL`,
+
   `CREATE TABLE IF NOT EXISTS scans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -106,6 +111,58 @@ const SQL_STATEMENTS = [
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
   )`,
+
+  // Contract compatibility columns
+  `ALTER TABLE alerts ADD COLUMN IF NOT EXISTS message TEXT`,
+  `ALTER TABLE alerts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`,
+
+  `CREATE TABLE IF NOT EXISTS disease_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    crop_id UUID REFERENCES crops(id) ON DELETE SET NULL,
+    scan_id UUID REFERENCES scans(id) ON DELETE SET NULL,
+    image_path TEXT NOT NULL,
+    disease_name VARCHAR(255) NOT NULL,
+    confidence DECIMAL(5,2) NOT NULL,
+    treatment TEXT,
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('low','medium','high')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`,
+
+  `ALTER TABLE alerts ADD COLUMN IF NOT EXISTS report_id UUID REFERENCES disease_reports(id) ON DELETE SET NULL`,
+
+  // Backfill compatibility values for existing databases
+  `UPDATE alerts
+   SET message = COALESCE(message, description, title),
+       is_active = COALESCE(is_active, NOT is_resolved)
+   WHERE message IS NULL OR is_active IS NULL`,
+
+  `INSERT INTO disease_reports (user_id, crop_id, scan_id, image_path, disease_name, confidence, treatment, severity, created_at)
+   SELECT s.user_id,
+          s.crop_id,
+          s.id,
+          COALESCE(s.image_url, ''),
+          COALESCE(s.disease_name, 'Unknown'),
+          COALESCE(s.confidence, 0),
+          s.recommendation,
+          CASE
+            WHEN s.severity = 'critical' THEN 'high'
+            WHEN s.severity = 'warning' THEN 'medium'
+            ELSE 'low'
+          END,
+          s.created_at
+   FROM scans s
+   WHERE NOT EXISTS (
+     SELECT 1 FROM disease_reports dr
+     WHERE dr.scan_id = s.id
+   )`,
+
+  `UPDATE alerts a
+   SET report_id = dr.id
+   FROM disease_reports dr
+   WHERE a.scan_id IS NOT NULL
+     AND dr.scan_id = a.scan_id
+     AND a.report_id IS NULL`,
 
   // Ensure alert geo columns exist for legacy databases
   `ALTER TABLE alerts ADD COLUMN IF NOT EXISTS latitude DECIMAL(9,6)`,
@@ -265,10 +322,82 @@ const SQL_STATEMENTS = [
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`,
 
+  `CREATE TABLE IF NOT EXISTS application_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source VARCHAR(20) NOT NULL CHECK (source IN ('app','http')),
+    level VARCHAR(20) NOT NULL DEFAULT 'info',
+    message TEXT NOT NULL,
+    meta JSONB DEFAULT '{}',
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    method VARCHAR(12),
+    path TEXT,
+    status_code INTEGER,
+    duration_ms INTEGER,
+    ip VARCHAR(64),
+    user_agent TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS chat_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_message TEXT NOT NULL,
+    assistant_reply TEXT NOT NULL,
+    language VARCHAR(10) DEFAULT 'en',
+    context_snapshot JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS ai_doctor_tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+    day INTEGER NOT NULL DEFAULT 1,
+    task_title VARCHAR(255) NOT NULL,
+    task_description TEXT NOT NULL,
+    product_name VARCHAR(255),
+    quantity VARCHAR(100),
+    unit VARCHAR(50),
+    cost_inr DECIMAL(10,2) DEFAULT 0,
+    priority VARCHAR(50) NOT NULL CHECK (priority IN ('urgent', 'recommended', 'optional')),
+    urgency_level VARCHAR(50) NOT NULL CHECK (urgency_level IN ('high', 'medium', 'low')),
+    reason TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'skipped')),
+    completed_at TIMESTAMPTZ,
+    disease_name VARCHAR(255),
+    disease_severity VARCHAR(20),
+    weather_context JSONB DEFAULT '{}',
+    community_context TEXT,
+    language VARCHAR(10) DEFAULT 'en' CHECK (language IN ('en', 'hi', 'mr')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS ai_doctor_recommendations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+    summary TEXT NOT NULL,
+    crop_name VARCHAR(255),
+    disease_name VARCHAR(255),
+    severity VARCHAR(20),
+    total_cost_inr DECIMAL(12,2),
+    deadline_hours INTEGER,
+    urgency VARCHAR(50),
+    notes TEXT,
+    language VARCHAR(10) DEFAULT 'en',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '7 days',
+    UNIQUE(user_id, scan_id)
+  )`,
+
   // Indexes
   `CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans(created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_disease_reports_user_id ON disease_reports(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_disease_reports_created_at ON disease_reports(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_disease_reports_crop_id ON disease_reports(crop_id)`,
   `CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)`,
   `CREATE INDEX IF NOT EXISTS idx_alerts_is_resolved ON alerts(is_resolved)`,
@@ -288,6 +417,14 @@ const SQL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_notification_logs_status ON notification_logs(status)`,
   `CREATE INDEX IF NOT EXISTS idx_weather_snapshots_user_id ON weather_snapshots(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_weather_snapshots_created_at ON weather_snapshots(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_application_logs_created ON application_logs(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_application_logs_source ON application_logs(source, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_application_logs_level ON application_logs(level, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_chat_history_user_created ON chat_history(user_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_tasks_user_scan ON ai_doctor_tasks(user_id, scan_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_tasks_status ON ai_doctor_tasks(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_recommendations_scan ON ai_doctor_recommendations(scan_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_doctor_recommendations_user ON ai_doctor_recommendations(user_id, created_at DESC)`,
 
   // Updated_at trigger
   `CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -296,7 +433,7 @@ const SQL_STATEMENTS = [
    $$ language 'plpgsql'`,
 
   ...[
-    'users','farms','crops','scans','alerts','community_posts','tasks','schemes','notification_preferences'
+    'users','farms','crops','scans','alerts','community_posts','tasks','schemes','notification_preferences','ai_doctor_tasks','ai_doctor_recommendations'
   ].map(t => `DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_${t}_updated_at') THEN
       CREATE TRIGGER update_${t}_updated_at BEFORE UPDATE ON ${t}

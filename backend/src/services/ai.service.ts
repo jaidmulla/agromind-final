@@ -36,7 +36,7 @@ export interface AIAnalysisResult {
   weather_risk_note?: string;
 }
 
-export async function analyzeImageWithAI(imagePath: string): Promise<AIAnalysisResult> {
+export async function analyzeImageWithAI(imagePath: string, cropHint?: string): Promise<AIAnalysisResult> {
   // Process image: strip EXIF, resize, compress
   const processedBuffer = await sharp(imagePath)
     .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
@@ -54,7 +54,10 @@ Your analysis must include:
 4. Step-by-step treatment with specific Indian market products
 Always respond ONLY with valid JSON. Never include markdown or explanations outside the JSON.`;
 
+  const cropContext = cropHint?.trim();
   const userPrompt = `⚠️ CRITICAL: Plant misidentification causes farmer financial losses. Follow these steps EXACTLY:
+
+${cropContext ? `CROP CONTEXT: The farmer linked this scan to ${cropContext}. Treat ${cropContext} as the canonical crop identity unless the image is unusable. Do NOT relabel it as another crop.` : 'CROP CONTEXT: No linked crop was provided. Infer the plant from the image, but use low confidence if the leaf shape is ambiguous.'}
 
 STEP 1: IDENTIFY LEAF CHARACTERISTICS
 List what you observe about the leaf morphology:
@@ -108,6 +111,8 @@ STEP 4: REJECT COMMON MISTAKES
 
 STEP 5: DIAGNOSE DISEASE
 ONLY after confirmed plant identification, diagnose disease.
+
+${cropContext ? `IMPORTANT: If the linked crop is ${cropContext}, the returned "plant_name" must be exactly "${cropContext}".` : ''}
 
 RESPOND ONLY with this JSON (no markdown, no explanations):
 {

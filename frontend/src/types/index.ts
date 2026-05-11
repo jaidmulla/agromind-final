@@ -71,6 +71,7 @@ export interface DiseaseInfo {
 
 export interface Scan {
   id: string;
+  report_id?: string;
   user_id: string;
   crop_id?: string;
   farm_id?: string;
@@ -136,6 +137,17 @@ export interface AlertStats {
 }
 
 // ─── Analytics ───────────────────────────────────────────────────────────────
+export interface RecentScan {
+  id: string;
+  disease_name: string;
+  plant_name: string;
+  confidence: number;
+  severity: 'critical' | 'warning' | 'info' | 'healthy';
+  image_url?: string;
+  status: string;
+  created_at: string;
+}
+
 export interface DashboardStats {
   total_loss_prevented: number;
   today_prevented: number;
@@ -143,7 +155,35 @@ export interface DashboardStats {
   critical_alerts: number;
   crops_monitored: number;
   protection_rate: number;
+  recent_scans: RecentScan[];
   currency: string;
+}
+
+export interface DiseaseReport {
+  id: string;
+  user_id: string;
+  crop_id?: string;
+  crop_name?: string;
+  image_path: string;
+  disease_name: string;
+  confidence: number;
+  treatment: string;
+  severity: 'low' | 'medium' | 'high';
+  created_at: string;
+}
+
+export interface ContractDashboard {
+  active_alerts: number;
+  crops_monitored: number;
+  protection_rate: number;
+  recent_scans: Array<{
+    report_id: string;
+    disease_name: string;
+    confidence: number;
+    severity: 'low' | 'medium' | 'high';
+    image_path?: string;
+    created_at: string;
+  }>;
 }
 
 export interface LossPreventionPoint {

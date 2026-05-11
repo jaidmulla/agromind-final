@@ -196,13 +196,6 @@ const DISEASE_MAPPING: Record<string, string> = {
   'botrytis': 'Gray Mold (Botrytis)',
   'botrytis cinerea': 'Gray Mold (Botrytis)',
 
-  // Healthy variations
-  'healthy': 'Healthy',
-  'no disease': 'Healthy',
-  'nodisease': 'Healthy',
-  'clean': 'Healthy',
-  'normal': 'Healthy',
-  'no pest': 'Healthy',
 };
 
 function normalizeDiseaseNameForLookup(diseaseName: string): string {

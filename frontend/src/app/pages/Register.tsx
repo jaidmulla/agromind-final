@@ -141,9 +141,10 @@ export function Register() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-muted-foreground block mb-1.5">Phone</label>
+                <label className="text-sm font-medium text-muted-foreground block mb-1.5">Phone (optional)</label>
                 <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)}
                   placeholder="9876543210" className="w-full px-4 py-3 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+                <p className="text-[11px] text-muted-foreground mt-1">Saved securely with your profile in the database</p>
               </div>
 
               <div>

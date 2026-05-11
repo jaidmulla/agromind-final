@@ -3,13 +3,20 @@ import type {
   AuthResponse, User, Farm, Crop, Scan, Alert, AlertStats,
   DashboardStats, LossPreventionPoint, AlertTypePoint,
   CropPerformancePoint, ResponseTimePoint, WeatherRisk,
-  CommunityPost, PostComment, NotificationPreferences,
+  CommunityPost, PostComment, NotificationPreferences, DiseaseReport, ContractDashboard,
 } from '../types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const CONTRACT_BASE_URL = BASE_URL;
 
 export const api = axios.create({
   baseURL: BASE_URL,
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+const contractApi = axios.create({
+  baseURL: CONTRACT_BASE_URL,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -21,7 +28,27 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+contractApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('agromind_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('agromind_token');
+      localStorage.removeItem('agromind_user');
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+
+contractApi.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
@@ -193,4 +220,24 @@ export const settingsApi = {
 
   updateNotifications: (body: Partial<NotificationPreferences>) =>
     api.put<{ success: boolean; data: NotificationPreferences }>('/settings/notifications', body).then(unwrap),
+};
+
+export const diseaseDetectionApi = {
+  scan: (formData: FormData) =>
+    contractApi.post<{ success: boolean; data: Scan }>('/scan', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    }).then(unwrap),
+
+  reports: (params?: { page?: number; limit?: number; severity?: 'low' | 'medium' | 'high'; disease?: string; crop_id?: string }) =>
+    contractApi.get<{ success: boolean; data: DiseaseReport[]; pagination: { page: number; limit: number; total: number } }>('/reports', { params }),
+
+  reportById: (id: string) =>
+    contractApi.get<{ success: boolean; data: DiseaseReport }>(`/reports/${id}`).then(unwrap),
+
+  dashboard: () =>
+    contractApi.get<{ success: boolean; data: ContractDashboard }>('/dashboard').then(unwrap),
+
+  alerts: (params?: { limit?: number; offset?: number; severity?: 'low' | 'medium' | 'high' }) =>
+    contractApi.get<{ success: boolean; data: Array<{ id: string; report_id?: string; message: string; severity: 'low' | 'medium' | 'high'; is_active: boolean; created_at: string }> }>('/alerts', { params }).then(unwrap),
 };

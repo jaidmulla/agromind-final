@@ -1,14 +1,12 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, CheckCircle, AlertCircle, Loader2, X, Upload, ImageIcon } from 'lucide-react';
-import { useState, useRef, useCallback } from 'react';
+import { Camera, CheckCircle, AlertCircle, Loader2, X, Upload } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useCreateScan, useCrops, useDashboardStats } from '../../hooks';
 import type { Scan } from '../../types';
 import { toast } from 'sonner';
 
 type ScanState = 'idle' | 'uploading' | 'analyzing' | 'complete';
-
-const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || '';
 
 export function Scan() {
   const navigate = useNavigate();
@@ -19,9 +17,16 @@ export function Scan() {
   const [scanResult, setScanResult] = useState<Scan | null>(null);
   const [progress, setProgress] = useState(0);
   const [selectedCropId, setSelectedCropId] = useState('');
+  const [cropName, setCropName] = useState('');
   const createScan = useCreateScan();
   const { data: crops = [] } = useCrops();
   const { refetch: refetchDashboard } = useDashboardStats();
+
+  useEffect(() => {
+    if (crops.length === 1 && !selectedCropId) {
+      setSelectedCropId(crops[0].id);
+    }
+  }, [crops, selectedCropId]);
 
   const handleFileSelect = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
@@ -40,6 +45,14 @@ export function Scan() {
 
   const startScan = async () => {
     if (!selectedFile) { toast.error('Please select an image first'); return; }
+    if (crops.length > 0 && !selectedCropId && !cropName.trim()) {
+      toast.error('Please link the image to a crop or enter the crop name before scanning');
+      return;
+    }
+    if (crops.length === 0 && !cropName.trim()) {
+      toast.error('Please enter the crop name before scanning');
+      return;
+    }
     setScanState('uploading');
     setProgress(0);
 
@@ -55,6 +68,7 @@ export function Scan() {
       const formData = new FormData();
       formData.append('image', selectedFile);
       if (selectedCropId) formData.append('crop_id', selectedCropId);
+      if (cropName.trim()) formData.append('crop_name', cropName.trim());
 
       setScanState('analyzing');
 
@@ -71,11 +85,12 @@ export function Scan() {
       // Refresh dashboard to show new alert
       await refetchDashboard();
 
-      // AUTO-NAVIGATE to AI Doctor page after 2 seconds with alert notification
-      const toastId = toast.success('✅ Scan complete! Alert created. Opening treatment recommendations...', { duration: 2500 });
+      // Redirect to report analysis page after scan completion.
+      toast.success('Scan complete. Opening analysis report...', { duration: 2500 });
       setTimeout(() => {
-        if (result?.id) {
-          navigate(`/ai-doctor/${result.id}`);
+        const targetReportId = result?.report_id || result?.id;
+        if (targetReportId) {
+          navigate(`/analysis/${targetReportId}`);
         }
       }, 2500);
     } catch (err) {
@@ -157,15 +172,34 @@ export function Scan() {
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-4">
                 {crops.length > 0 && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground block mb-2">Link to Crop (optional)</label>
+                    <label className="text-sm font-medium text-muted-foreground block mb-2">Link to Crop</label>
+                    <p className="text-xs text-muted-foreground mb-2">Choose a saved crop, or type the crop name below if it is not saved yet.</p>
                     <select value={selectedCropId} onChange={e => setSelectedCropId(e.target.value)}
                       className="w-full px-4 py-3 rounded-lg border border-border bg-background focus:ring-2 focus:ring-[#2E7D32] focus:outline-none">
                       <option value="">Select a crop...</option>
                       {crops.map(c => <option key={c.id} value={c.id}>{c.name} — {c.field_name || c.variety || 'Field'}</option>)}
                     </select>
+                    <input
+                      value={cropName}
+                      onChange={e => setCropName(e.target.value)}
+                      placeholder="Or type crop name, e.g. Potato"
+                      className="w-full mt-3 px-4 py-3 rounded-lg border border-border bg-background focus:ring-2 focus:ring-[#2E7D32] focus:outline-none"
+                    />
+                  </div>
+                )}
+                {crops.length === 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-2">Crop Name</label>
+                    <input
+                      value={cropName}
+                      onChange={e => setCropName(e.target.value)}
+                      placeholder="Enter crop name, e.g. Potato"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background focus:ring-2 focus:ring-[#2E7D32] focus:outline-none"
+                    />
                   </div>
                 )}
                 <button onClick={startScan}
+                  disabled={crops.length > 0 ? (!selectedCropId && !cropName.trim()) : !cropName.trim()}
                   className="w-full bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-4 rounded-xl font-bold text-lg transition-all shadow-lg">
                   🔍 Start AI Analysis
                 </button>
@@ -272,7 +306,7 @@ export function Scan() {
               </div>
 
               <div className="flex gap-4">
-                <button onClick={() => navigate(`/solution/${scanResult.id}`)}
+                <button onClick={() => navigate(`/treatment/${scanResult.report_id || scanResult.id}`)}
                   className="flex-1 bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-3 rounded-xl font-bold transition-all">
                   View Full Treatment Plan →
                 </button>

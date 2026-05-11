@@ -13,6 +13,7 @@ import { authRouter } from './routes/auth.routes';
 import { scansRouter } from './routes/scans.routes';
 import { alertsRouter } from './routes/alerts.routes';
 import { notificationsRouter } from './routes/notifications.routes';
+import { diseaseReportsRouter } from './routes/disease-reports.routes';
 import {
   analyticsRouter,
   farmsRouter,
@@ -46,6 +47,7 @@ import { chat as legacyChat } from './controllers/chat.controller';
 // Middleware
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { authenticate } from './middleware/auth';
+import { httpRequestLogger } from './middleware/http-request-logger';
 import logger from './utils/logger';
 
 // Jobs
@@ -99,6 +101,8 @@ app.use('/api',
 // =====================
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.use(httpRequestLogger);
 
 // =====================
 // 📁 STATIC FILES
@@ -169,6 +173,7 @@ app.get('/api/v1/test-db', async (_req, res) => {
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/scans', scansRouter);
 app.use('/api/v1/alerts', alertsRouter);
+app.use('/api/v1', diseaseReportsRouter);
 app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/farms', farmsRouter);

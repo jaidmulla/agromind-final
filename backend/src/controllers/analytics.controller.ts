@@ -6,7 +6,7 @@ import { getCoordinatesByCity, getWeatherRisk, saveWeatherSnapshot } from '../se
 export const getDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const uid = req.user!.id;
-    const [lossR, alertR, cropsR, scansR] = await Promise.all([
+    const [lossR, alertR, cropsR, scansR, recentR] = await Promise.all([
       query(
         `SELECT COALESCE(SUM(amount_prevented),0) as total,
                 COALESCE(SUM(amount_prevented) FILTER (WHERE recorded_at >= CURRENT_DATE),0) as today
@@ -20,17 +20,24 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       query(`SELECT COUNT(*) as count FROM crops WHERE user_id=$1`, [uid]),
       query(
         `SELECT COUNT(*) as total,
-                COUNT(*) FILTER (WHERE status='resolved') as resolved
+                COUNT(*) FILTER (WHERE disease_name = 'Healthy') as healthy
          FROM scans WHERE user_id=$1`, [uid]
+      ),
+      query(
+        `SELECT s.id, s.disease_name, s.plant_name, s.confidence, s.severity,
+                s.image_url, s.status, s.created_at
+         FROM scans s WHERE s.user_id=$1
+         ORDER BY s.created_at DESC LIMIT 10`, [uid]
       ),
     ]);
 
     const activeAlerts = parseInt(alertR.rows[0].active) || 0;
     const criticalAlerts = parseInt(alertR.rows[0].critical) || 0;
     const totalScans = parseInt(scansR.rows[0].total) || 0;
-    const resolvedScans = parseInt(scansR.rows[0].resolved) || 0;
+    const healthyScans = parseInt(scansR.rows[0].healthy) || 0;
+    // Spec: protection_rate = (reports where disease = "Healthy" / total reports) * 100
     const protectionRate = totalScans > 0
-      ? Math.round((resolvedScans / totalScans) * 100)
+      ? Math.round((healthyScans / totalScans) * 100)
       : 100;
 
     res.json({
@@ -42,6 +49,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
         critical_alerts: criticalAlerts,
         crops_monitored: parseInt(cropsR.rows[0].count) || 0,
         protection_rate: protectionRate,
+        recent_scans: recentR.rows,
         currency: 'INR',
       },
     });

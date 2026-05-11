@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { query } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
 import { sendAlertToUser } from '../services/alert.service';
+import logger from '../utils/logger';
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -20,7 +21,21 @@ const signToken = (userId: string) =>
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password, phone, location, farm_size, latitude, longitude } = req.body;
+    const raw = req.body as Record<string, unknown>;
+    const name = String(raw.name ?? '').trim();
+    const email = String(raw.email ?? '').trim().toLowerCase();
+    const password = String(raw.password ?? '');
+    const phoneRaw = raw.phone != null && raw.phone !== '' ? String(raw.phone).trim() : '';
+    const phone = phoneRaw || null;
+    const location =
+      raw.location != null && raw.location !== '' ? String(raw.location).trim() : null;
+    const farm_size =
+      raw.farm_size !== undefined && raw.farm_size !== null && raw.farm_size !== ''
+        ? Number(raw.farm_size)
+        : null;
+    const latitude = raw.latitude !== undefined && raw.latitude !== null ? Number(raw.latitude) : null;
+    const longitude = raw.longitude !== undefined && raw.longitude !== null ? Number(raw.longitude) : null;
+
     if (!name || !email || !password) {
       res.status(400).json({ success: false, message: 'Name, email and password are required' });
       return;
@@ -33,18 +48,26 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const hash = await bcrypt.hash(password, 12);
     const r = await query(
       `INSERT INTO users (name,email,password_hash,phone,location,latitude,longitude,farm_size)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,name,email,location,farm_size`,
-      [name, email, hash, phone || null, location || null, latitude || null, longitude || null, farm_size || null]
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING id,name,email,phone,location,farm_size,latitude,longitude`,
+      [name, email, hash, phone, location, latitude, longitude, farm_size]
     );
     const user = r.rows[0];
     await query(`INSERT INTO notification_preferences (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [user.id]);
+
+    logger.info('User registered', {
+      userId: user.id,
+      email: user.email,
+      hasPhone: !!phone,
+      hasLocation: !!location,
+    });
 
     // Send welcome alerts (SMS + Email + Push)
     const welcomeMessage = {
       title: 'Welcome to AgroMind AI+',
       body: `Hi ${user.name || 'Farmer'}, your AgroMind AI+ account is ready. Start by scanning a leaf image for instant disease detection.`,
       subject: 'Welcome to AgroMind AI+',
-      phone,
+      phone: phone ?? undefined,
       email,
       pushTitle: 'Welcome to AgroMind AI+',
     };
@@ -58,7 +81,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const email = String((req.body as { email?: string })?.email ?? '').trim().toLowerCase();
+    const password = String((req.body as { password?: string })?.password ?? '');
     if (!email || !password) {
       res.status(400).json({ success: false, message: 'Email and password required' });
       return;
@@ -69,6 +93,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const { password_hash, ...user } = r.rows[0];
+    logger.info('User login', { userId: user.id, email: user.email });
     res.json({ success: true, data: { user, token: signToken(user.id) } });
   } catch {
     res.status(500).json({ success: false, message: 'Login failed' });
@@ -91,7 +116,20 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
 
 export const updateMe = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, phone, location, farm_size, language, latitude, longitude } = req.body;
+    const b = req.body as Record<string, unknown>;
+    const name = b.name !== undefined ? String(b.name).trim() || null : null;
+    const phone = b.phone !== undefined ? String(b.phone).trim() || null : null;
+    const location = b.location !== undefined ? String(b.location).trim() || null : null;
+    const language = b.language !== undefined ? String(b.language).trim() || null : null;
+    const farm_size =
+      b.farm_size !== undefined && b.farm_size !== null && b.farm_size !== ''
+        ? Number(b.farm_size)
+        : null;
+    const latitude =
+      b.latitude !== undefined && b.latitude !== null ? Number(b.latitude) : null;
+    const longitude =
+      b.longitude !== undefined && b.longitude !== null ? Number(b.longitude) : null;
+
     const r = await query(
       `UPDATE users SET name=COALESCE($1,name), phone=COALESCE($2,phone), location=COALESCE($3,location),
        farm_size=COALESCE($4,farm_size), language=COALESCE($5,language),
@@ -99,6 +137,7 @@ export const updateMe = async (req: AuthRequest, res: Response): Promise<void> =
        WHERE id=$8 RETURNING id,name,email,phone,location,farm_size,language,latitude,longitude`,
       [name, phone, location, farm_size, language, latitude, longitude, req.user!.id]
     );
+    logger.info('Profile updated', { userId: req.user!.id });
     res.json({ success: true, data: r.rows[0] });
   } catch {
     res.status(500).json({ success: false, message: 'Update failed' });
