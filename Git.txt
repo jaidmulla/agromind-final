@@ -7,3 +7,5 @@ git push origin main
 git add . && git commit -m "update" && git push
 
 git pull origin main --rebase && git push origin main
+
+git config --global user.email "jaidmulla01@gmail.com" && echo "green contribution" >> test.txt && git add . && git commit -m "fix contribution" && git push
