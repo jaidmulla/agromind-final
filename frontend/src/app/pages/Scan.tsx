@@ -117,16 +117,18 @@ export function Scan() {
       formData.append('image', selectedFile);
       const result = await createScan.mutateAsync(formData);
       timers.forEach(window.clearTimeout);
+      await refetchDashboard();
+      const reportId = result.report_id || result.id;
+      if (reportId) {
+        toast.success('Scan complete. Opening analysis.');
+        navigate(`/analysis/${reportId}`, { replace: true });
+        return;
+      }
       setActiveStep(4);
       setProgress(100);
       setScanResult(result);
       setScanState('complete');
-      await refetchDashboard();
-      if (result.needs_clearer_image) {
-        toast.warning('Image unclear. Please upload a sharper leaf image.');
-      } else {
-        toast.success('Scan complete. Report saved to dashboard.');
-      }
+      toast.success('Scan complete. Report saved to dashboard.');
     } catch (err: any) {
       timers.forEach(window.clearTimeout);
       const message = err?.response?.data?.message || err?.message || 'Scan failed. Please try again.';

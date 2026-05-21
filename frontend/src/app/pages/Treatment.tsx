@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router';
-import { ShieldCheck, ArrowLeft, Clock } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, Clock, LayoutDashboard } from 'lucide-react';
 import { useReport } from '../../hooks';
 
 export function Treatment() {
@@ -27,6 +27,14 @@ export function Treatment() {
       >
         <ArrowLeft className="w-4 h-4" />
         Back to analysis
+      </button>
+
+      <button
+        onClick={() => navigate('/dashboard')}
+        className="mb-5 ml-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <LayoutDashboard className="w-4 h-4" />
+        Dashboard
       </button>
 
       <h1 className="text-3xl font-bold mb-2">Treatment Plan</h1>

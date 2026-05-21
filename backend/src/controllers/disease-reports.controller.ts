@@ -121,17 +121,14 @@ export const getContractDashboard = async (req: AuthRequest, res: Response): Pro
       query(
         `SELECT COUNT(*)::INT AS active_alerts
          FROM alerts
-         WHERE user_id = $1 AND NOT is_resolved`,
+         WHERE user_id = $1 AND COALESCE(is_active, NOT is_resolved) = true`,
         [uid]
       ),
       query(
-        `SELECT COUNT(DISTINCT COALESCE(s.plant_name, c.name))::INT AS crops_monitored
+        `SELECT COUNT(DISTINCT dr.crop_id)::INT AS crops_monitored
          FROM disease_reports dr
-         LEFT JOIN scans s ON s.id = dr.scan_id
-         LEFT JOIN crops c ON c.id = dr.crop_id
          WHERE dr.user_id = $1
-           AND COALESCE(s.plant_name, c.name) IS NOT NULL
-           AND COALESCE(s.plant_name, c.name) <> 'Unknown crop'`,
+           AND dr.crop_id IS NOT NULL`,
         [uid]
       ),
       query(
@@ -178,7 +175,7 @@ export const getContractAlerts = async (req: AuthRequest, res: Response): Promis
     const limit = Math.min(Math.max(parseInt(String(req.query.limit || '20'), 10) || 20, 1), 100);
     const offset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
 
-    let where = 'WHERE a.user_id = $1 AND NOT a.is_resolved';
+    let where = 'WHERE a.user_id = $1 AND COALESCE(a.is_active, NOT a.is_resolved) = true';
     const params: Array<string | number> = [uid];
 
     if (req.query.severity) {
@@ -189,9 +186,9 @@ export const getContractAlerts = async (req: AuthRequest, res: Response): Promis
     const alertsR = await query(
       `SELECT a.id,
               a.user_id,
-              a.scan_id AS report_id,
+              COALESCE(a.report_id, a.scan_id) AS report_id,
               a.scan_id,
-              COALESCE(a.description, a.title) AS message,
+              COALESCE(a.message, a.description, a.title) AS message,
               a.severity,
               COALESCE(a.is_active, NOT a.is_resolved) AS is_active,
               a.created_at
@@ -204,6 +201,7 @@ export const getContractAlerts = async (req: AuthRequest, res: Response): Promis
 
     const data = alertsR.rows.map((row) => ({
       ...row,
+      report_id: row.report_id || row.scan_id,
       severity: toContractSeverity(row.severity),
     }));
 

@@ -4,11 +4,14 @@ import fs from 'fs';
 import logger from '../utils/logger';
 
 export interface MLPrediction {
+  disease_name?: string;
+  treatment?: string;
+  severity?: 'critical' | 'warning' | 'info' | 'healthy';
+  contract_severity?: 'low' | 'medium' | 'high';
   disease: string;
   plant: string;
   confidence: number;
   class_label?: string;
-  severity?: 'critical' | 'warning' | 'info' | 'healthy';
   loss_per_acre_inr?: number;
   yield_loss_percent?: number;
   requires_clearer_image?: boolean;
@@ -50,6 +53,14 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function normalizeSeverity(value: unknown): 'critical' | 'warning' | 'info' | 'healthy' {
+  const severity = String(value || '').toLowerCase();
+  if (severity === 'healthy') return 'healthy';
+  if (severity === 'critical' || severity === 'high') return 'critical';
+  if (severity === 'warning' || severity === 'medium') return 'warning';
+  return 'info';
+}
+
 export async function predictWithML(imagePath: string): Promise<MLPrediction | null> {
   const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 
@@ -63,7 +74,26 @@ export async function predictWithML(imagePath: string): Promise<MLPrediction | n
         timeout: 30000,
       });
 
-      return res.data as MLPrediction;
+      const data = res.data as Partial<MLPrediction> & Record<string, unknown>;
+      const diseaseName = String(data.disease_name || data.disease || 'Unknown');
+      const plant = String(data.plant || data.plant_name || 'Unknown crop');
+      const confidenceRaw = Number(data.confidence ?? data.confidence_score ?? 0);
+      const confidence = confidenceRaw <= 1 ? confidenceRaw * 100 : confidenceRaw;
+      const legacySeverity = normalizeSeverity(data.legacy_severity || data.severity || (String(diseaseName).toLowerCase().includes('healthy') ? 'healthy' : 'info'));
+
+      return {
+        ...data,
+        disease_name: diseaseName,
+        disease: diseaseName,
+        plant,
+        confidence,
+        treatment: String(data.treatment || data.disease_info?.treatment || data.message || ''),
+        severity: legacySeverity,
+        contract_severity: (String(data.severity || '').toLowerCase() === 'low' || String(data.severity || '').toLowerCase() === 'medium' || String(data.severity || '').toLowerCase() === 'high')
+          ? (String(data.severity).toLowerCase() as 'low' | 'medium' | 'high')
+          : (legacySeverity === 'critical' ? 'high' : legacySeverity === 'warning' ? 'medium' : 'low'),
+        is_healthy: Boolean(data.is_healthy || legacySeverity === 'healthy' || /healthy/i.test(diseaseName)),
+      } as MLPrediction;
     } catch (err: any) {
       const status = err?.response?.status;
       const code = err?.code;

@@ -120,15 +120,7 @@ export function useContractAlerts() {
   return useQuery({
     queryKey: ['contract-alerts'],
     queryFn: async () => {
-      const raw = await alertsApi.list({ is_resolved: false, limit: 20 });
-      return raw.map((a) => ({
-        id: a.id,
-        report_id: a.scan_id,
-        message: a.description || a.title,
-        severity: (a.severity === 'critical' ? 'high' : a.severity === 'warning' ? 'medium' : 'low') as 'low' | 'medium' | 'high',
-        is_active: !a.is_resolved,
-        created_at: a.created_at,
-      }));
+      return diseaseDetectionApi.alerts({ limit: 20, severity: undefined });
     },
     refetchInterval: 10_000,
     staleTime: 5_000,

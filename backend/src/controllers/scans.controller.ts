@@ -223,12 +223,23 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
     const farm_id = typeof req.body.farm_id === 'string' && req.body.farm_id.trim()
       ? req.body.farm_id.trim()
       : null;
+    const crop_id = typeof req.body.crop_id === 'string' && req.body.crop_id.trim()
+      ? req.body.crop_id.trim()
+      : null;
     const imageUrl = `/uploads/${req.file.filename}`;
 
     if (farm_id) {
       const linkedFarm = await query('SELECT id FROM farms WHERE id = $1 AND user_id = $2 LIMIT 1', [farm_id, req.user!.id]);
       if (!linkedFarm.rows.length) {
         res.status(403).json({ success: false, message: 'Farm not found or does not belong to this user' });
+        return;
+      }
+    }
+
+    if (crop_id) {
+      const linkedCrop = await query('SELECT id FROM crops WHERE id = $1 AND user_id = $2 LIMIT 1', [crop_id, req.user!.id]);
+      if (!linkedCrop.rows.length) {
+        res.status(403).json({ success: false, message: 'Crop not found or does not belong to this user' });
         return;
       }
     }
@@ -266,7 +277,7 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    const geo = await resolveScanCoordinates(req.user!.id, farm_id, undefined);
+    const geo = await resolveScanCoordinates(req.user!.id, farm_id, crop_id);
     let weather: WeatherData | null = null;
     if (typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
       try {
@@ -414,7 +425,7 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
        RETURNING *`,
       [
         req.user!.id,
-        null,
+        crop_id,
         farm_id || null,
         imageUrl,
         req.file.filename,
@@ -453,7 +464,7 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
          RETURNING id`,
         [
           req.user!.id,
-          null,
+          crop_id,
           imageUrl,
           diseaseName,
           finalConfidence,
@@ -479,13 +490,14 @@ export const createScan = async (req: AuthRequest, res: Response): Promise<void>
       const preventable = Math.round(potentialLossInr * 0.85);
       const alertRes = await query(
         `INSERT INTO alerts
-           (user_id, crop_id, farm_id, scan_id, title, description, severity, type,
+           (user_id, crop_id, farm_id, scan_id, report_id, title, description, message, severity, type,
             potential_loss, preventable_loss, time_left_seconds, confidence, metadata, latitude, longitude)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'disease',$8,$9,$10,$11,$12,$13,$14)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'disease',$10,$11,$12,$13,$14,$15,$16)
          RETURNING id`,
         [
-          req.user!.id, null, farm_id || null, scan.id,
+          req.user!.id, crop_id, farm_id || null, scan.id, reportId,
           `${diseaseName} Detected`,
+          analysis.recommendation,
           analysis.recommendation,
           finalSeverity,
           potentialLossInr,

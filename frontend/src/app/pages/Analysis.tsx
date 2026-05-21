@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { AlertTriangle, CalendarDays, ArrowRight, Leaf, ShieldCheck, FlaskConical, Droplets } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ArrowRight, Leaf, ShieldCheck, FlaskConical, Droplets, LayoutDashboard } from 'lucide-react';
 import { useReport } from '../../hooks';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || '';
@@ -93,11 +93,19 @@ export function Analysis() {
           </div>
 
           <button
-            onClick={() => navigate(report.scan_id ? `/solution/${report.scan_id}` : `/treatment/${report.id}`)}
+            onClick={() => navigate(`/treatment/${report.id}`)}
             className="mt-6 w-full bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-xl py-3 font-semibold flex items-center justify-center gap-2"
           >
-            Open Full Scan Report
+            View Treatment Plan
             <ArrowRight className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="mt-3 w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2 border border-border hover:bg-muted"
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            Back to Dashboard
           </button>
         </div>
       </div>

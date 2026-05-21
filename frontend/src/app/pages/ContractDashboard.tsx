@@ -68,7 +68,7 @@ export function ContractDashboard() {
               return (
                 <button
                   key={scan.report_id}
-                  onClick={() => navigate(scan.scan_id ? `/solution/${scan.scan_id}` : `/analysis/${scan.report_id}`)}
+                  onClick={() => navigate(`/analysis/${scan.report_id}`)}
                   className="w-full text-left rounded-xl border border-border p-3 hover:bg-muted transition-colors"
                 >
                   <div className="flex items-center gap-3">

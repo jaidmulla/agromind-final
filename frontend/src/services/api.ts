@@ -230,7 +230,7 @@ export const diseaseDetectionApi = {
     }).then(unwrap),
 
   reports: (params?: { page?: number; limit?: number; severity?: 'low' | 'medium' | 'high'; disease?: string; crop_id?: string }) =>
-    contractApi.get<{ success: boolean; data: DiseaseReport[]; pagination: { page: number; limit: number; total: number } }>('/reports', { params }),
+    contractApi.get<{ success: boolean; data: DiseaseReport[]; pagination: { page: number; limit: number; total: number } }>('/reports', { params }).then(r => r.data),
 
   reportById: (id: string) =>
     contractApi.get<{ success: boolean; data: DiseaseReport }>(`/reports/${id}`).then(unwrap),

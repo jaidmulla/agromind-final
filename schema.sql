@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     scan_id             UUID REFERENCES scans(id) ON DELETE SET NULL,
     title               VARCHAR(255) NOT NULL,
     description         TEXT,
+    message             TEXT,
     severity            VARCHAR(20) NOT NULL CHECK (severity IN ('critical','warning','info')),
     type                VARCHAR(50) DEFAULT 'disease' CHECK (type IN ('disease','pest','nutrient','irrigation','weather','system')),
     potential_loss      DECIMAL(12,2) DEFAULT 0,
@@ -106,12 +107,29 @@ CREATE TABLE IF NOT EXISTS alerts (
     latitude            DECIMAL(9,6),
     longitude           DECIMAL(9,6),
     is_read             BOOLEAN DEFAULT false,
+    is_active           BOOLEAN DEFAULT true,
     is_resolved         BOOLEAN DEFAULT false,
     resolved_at         TIMESTAMPTZ,
     metadata            JSONB DEFAULT '{}',
     created_at          TIMESTAMPTZ DEFAULT NOW(),
     updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ── Disease Reports ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS disease_reports (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    crop_id         UUID REFERENCES crops(id) ON DELETE SET NULL,
+    scan_id         UUID REFERENCES scans(id) ON DELETE SET NULL,
+    image_path      TEXT NOT NULL,
+    disease_name    VARCHAR(255) NOT NULL,
+    confidence      DECIMAL(5,2) NOT NULL,
+    treatment       TEXT,
+    severity        VARCHAR(20) NOT NULL CHECK (severity IN ('low','medium','high')),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS report_id UUID REFERENCES disease_reports(id) ON DELETE SET NULL;
 
 -- ── Weather Snapshots ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS weather_snapshots (
