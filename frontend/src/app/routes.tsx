@@ -16,6 +16,7 @@ import { GovernmentSchemes } from './pages/GovernmentSchemes';
 import { AIDoctorChat } from './pages/AIDoctorChat';
 import { AIDoctorPage } from './pages/AIDoctorPage';
 import { AIDoctorTasksDashboard } from './pages/AIDoctorTasksDashboard';
+import { LLMChat } from './pages/LLMChat';
 import { BeforeAfterSimulation } from './pages/BeforeAfterSimulation';
 import LossPreventionDashboard from './pages/LossPreventionDashboard';
 import { Analysis } from './pages/Analysis';
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
           { path: 'map', Component: DiseaseMap },
           { path: 'schemes', Component: GovernmentSchemes },
           { path: 'chat', Component: AIDoctorChat },
+          { path: 'llm', Component: LLMChat },
           { path: 'ai-doctor/:scanId', Component: AIDoctorPage },
           { path: 'ai-doctor-tasks', Component: AIDoctorTasksDashboard },
           { path: 'simulation', Component: BeforeAfterSimulation },

@@ -23,7 +23,8 @@ import {
   schemesRouter,
   chatRouter,
   lossesRouter,
-  aiDoctorRouter
+  aiDoctorRouter,
+  llmChatRouter
 } from './routes/index';
 
 // Controllers
@@ -182,6 +183,7 @@ app.use('/api/v1/community', communityRouter);
 app.use('/api/v1/settings', settingsRouter);
 app.use('/api/v1/schemes', schemesRouter);
 app.use('/api/v1/chat', chatRouter);
+app.use('/api/v1/llm', llmChatRouter);
 app.use('/api/v1/losses', lossesRouter);
 app.use('/api/v1/ai-doctor', aiDoctorRouter);
 

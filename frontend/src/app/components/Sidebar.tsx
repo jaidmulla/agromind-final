@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router';
-import { LayoutDashboard, Scan, Users, BarChart3, Settings, LogOut, Leaf, CloudSun, FlaskConical, Map, BookOpen, MessageCircle, Play } from 'lucide-react';
+import { LayoutDashboard, Scan, Users, BarChart3, Settings, LogOut, Leaf, CloudSun, FlaskConical, Map, BookOpen, MessageCircle, Play, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -16,6 +16,7 @@ export function Sidebar() {
     { to: '/analytics', icon: BarChart3, label: 'Analytics' },
     { to: '/weather', icon: CloudSun, label: 'Weather' },
     { to: '/chat', icon: MessageCircle, label: 'AI Doctor' },
+    { to: '/llm', icon: Sparkles, label: 'AI Chat' },
     { to: '/schemes', icon: BookOpen, label: 'Gov Schemes' },
     { to: '/explain', icon: FlaskConical, label: 'Explainable AI' },
     { to: '/settings', icon: Settings, label: 'Settings' },

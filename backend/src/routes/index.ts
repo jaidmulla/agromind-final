@@ -48,6 +48,7 @@ settingsRouter.put('/notifications', updateNotificationPrefs);
 
 import { getSchemes, getSchemeById, getInputRecommendations } from '../controllers/schemes.controller';
 import { chat, getQuickReplies, analyzeImage, getChatHistoryEndpoint } from '../controllers/chat.controller';
+import { llmChat, getConversation, listConversations, deleteConversation } from '../controllers/llm-chat.controller';
 import { recordLossPrevention, getLossRecords, getLossSummary, deleteLossRecord } from '../controllers/losses.controller';
 import { getLossPreventionStats, searchLossRecords } from '../controllers/losses-advanced.controller';
 import { getRecommendationsByScán, getTasksByScan, completeAITask, getAllUserTasks, getAIDoctorDashboard } from '../controllers/ai-doctor.controller';
@@ -82,3 +83,10 @@ aiDoctorRouter.get('/tasks/:scanId', getTasksByScan);
 aiDoctorRouter.put('/tasks/:taskId/complete', completeAITask);
 aiDoctorRouter.get('/all-tasks', getAllUserTasks);
 aiDoctorRouter.get('/dashboard', getAIDoctorDashboard);
+
+export const llmChatRouter = Router();
+llmChatRouter.use(authenticate);
+llmChatRouter.post('/', llmChat);
+llmChatRouter.get('/conversations', listConversations);
+llmChatRouter.get('/conversations/:conversationId', getConversation);
+llmChatRouter.delete('/conversations/:conversationId', deleteConversation);

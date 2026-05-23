@@ -17,7 +17,7 @@ interface GeminiRequestBody {
 }
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MODEL_CHAIN = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+const MODEL_CHAIN = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 const MAX_RETRIES_PER_MODEL = 2;
 const RETRY_BASE_DELAY_MS = 1500;
 

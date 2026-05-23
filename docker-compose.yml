@@ -42,6 +42,7 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-gpt-4o-mini}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
       ML_SERVICE_URL: http://ml-service:5000
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:5173,http://localhost}

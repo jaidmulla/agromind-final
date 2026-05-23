@@ -216,36 +216,39 @@ export function AIDoctorChat() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto flex flex-col h-[calc(100vh-60px)]">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-[#2E7D32] rounded-2xl flex items-center justify-center">
-              <Bot className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">AgroMind AI Doctor</h1>
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                Smart Farming Assistant
-              </p>
-            </div>
+    <div className="w-full max-w-4xl mx-auto flex flex-col h-[calc(100vh-120px)] bg-gradient-to-br from-[#F5F5F5] to-white rounded-2xl shadow-lg overflow-hidden">
+      {/* Header - Fixed */}
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} 
+        className="bg-gradient-to-r from-[#2E7D32] to-[#1B5E20] text-white px-6 py-4 flex items-center justify-between flex-shrink-0 border-b border-[#1B5E20]/20">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+            <Stethoscope className="w-6 h-6" />
           </div>
-          {/* Language selector */}
-          <div className="flex gap-1">
-            {LANGUAGE_OPTIONS.map(l => (
-              <button key={l.code} onClick={() => setLanguage(l.code)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${language === l.code ? 'bg-[#2E7D32] text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
-                {l.flag} {l.label}
-              </button>
-            ))}
+          <div>
+            <h1 className="text-xl font-bold">AgroMind AI Doctor</h1>
+            <p className="text-xs text-green-100 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-green-300 animate-pulse" />
+              Always Ready to Help
+            </p>
           </div>
+        </div>
+        {/* Language selector */}
+        <div className="flex gap-1">
+          {LANGUAGE_OPTIONS.map(l => (
+            <button key={l.code} onClick={() => setLanguage(l.code)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                language === l.code 
+                  ? 'bg-white text-[#2E7D32] shadow-md' 
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}>
+              {l.flag} {l.label}
+            </button>
+          ))}
         </div>
       </motion.div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+      {/* Messages Container */}
+      <div className="flex-1 overflow-y-auto space-y-3 p-6 pr-4 scroll-smooth">
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => (
             <motion.div key={i}
@@ -254,11 +257,11 @@ export function AIDoctorChat() {
               <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'assistant' ? 'bg-[#2E7D32]' : 'bg-[#1565C0]'}`}>
                 {msg.role === 'assistant' ? <Bot className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-white" />}
               </div>
-              <div className={`max-w-[80%] group relative ${msg.role === 'user' ? 'items-end' : ''}`}>
-                <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+              <div className={`max-w-[75%] group ${msg.role === 'user' ? 'items-end' : ''}`}>
+                <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-md transition-all ${
                   msg.role === 'assistant'
-                    ? 'bg-card border border-border rounded-tl-none'
-                    : 'bg-[#2E7D32] text-white rounded-tr-none'
+                    ? 'bg-white border border-gray-200 text-gray-800'
+                    : 'bg-gradient-to-br from-[#2E7D32] to-[#1B5E20] text-white rounded-tr-none'
                 }`}>
                   {msg.role === 'assistant' ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none [&_*]:my-0 [&_p]:mb-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:mb-1 [&_strong]:font-semibold [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2 [&_h2]:text-base [&_h2]:font-bold [&_h2]:my-2 [&_h3]:font-bold [&_h3]:my-1">
@@ -270,13 +273,13 @@ export function AIDoctorChat() {
                     <div>{msg.content}</div>
                   )}
                 </div>
-        {msg.role === 'assistant' && (
+                {msg.role === 'assistant' && (
                   <button 
                     onClick={() => speakText(msg.content, language, messages.indexOf(msg))}
-                    className={`mt-1 flex items-center gap-1 text-xs opacity-0 group-hover:opacity-100 transition-all ${
+                    className={`mt-1.5 flex items-center gap-1 text-xs opacity-0 group-hover:opacity-100 transition-all px-2 py-1 rounded ${
                       speakingMessageIndex === messages.indexOf(msg) && isSpeaking
-                        ? 'text-red-500 hover:text-red-600'
-                        : 'text-muted-foreground hover:text-[#2E7D32]'
+                        ? 'text-red-500 bg-red-50 hover:text-red-600'
+                        : 'text-[#2E7D32] bg-green-50 hover:text-[#1B5E20]'
                     }`}>
                     {speakingMessageIndex === messages.indexOf(msg) && isSpeaking ? (
                       <>
@@ -295,11 +298,12 @@ export function AIDoctorChat() {
         </AnimatePresence>
 
         {chatMutation.isPending && (
-          <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#2E7D32] flex items-center justify-center">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#2E7D32] flex items-center justify-center flex-shrink-0">
               <Bot className="w-4 h-4 text-white" />
             </div>
-            <div className="bg-card border border-border rounded-2xl rounded-tl-none px-4 py-3">
+            <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-none px-4 py-3 shadow-md">
               <div className="flex gap-1">
                 {[0,1,2].map(i => (
                   <motion.div key={i} className="w-2 h-2 rounded-full bg-[#2E7D32]"
@@ -307,84 +311,110 @@ export function AIDoctorChat() {
                 ))}
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Replies */}
-      {quickReplies.length > 0 && messages.length <= 2 && (
-        <div className="flex gap-2 flex-wrap mb-3">
+      {/* Quick Replies - Always Visible */}
+      {quickReplies.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="px-6 py-2 flex gap-2 flex-wrap">
           {quickReplies.slice(0, 4).map((qr: string, i: number) => (
-            <button key={i} onClick={() => sendMessage(qr)}
-              className="text-xs px-3 py-1.5 rounded-full border border-[#2E7D32] text-[#2E7D32] hover:bg-[#E8F5E9] transition-all">
-              {qr}
-            </button>
+            <motion.button key={i} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              onClick={() => sendMessage(qr)}
+              className="text-xs px-3 py-1.5 rounded-full border-2 border-[#2E7D32] text-[#2E7D32] hover:bg-[#E8F5E9] hover:shadow-md transition-all font-medium">
+              {qr.length > 35 ? qr.substring(0, 35) + '...' : qr}
+            </motion.button>
           ))}
-        </div>
+        </motion.div>
       )}
 
-      {/* Input Area */}
-      <div className="bg-card rounded-2xl border border-border p-3 flex gap-2 items-end">
-        <textarea
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-          placeholder={language === 'hi' ? 'अपना सवाल यहां लिखें...' : language === 'mr' ? 'तुमचा प्रश्न इथे लिहा...' : 'Ask anything about your crops...'}
-          rows={1}
-          className="flex-1 bg-transparent resize-none focus:outline-none text-sm py-1"
-          style={{ maxHeight: '100px', overflowY: 'auto' }}
-        />
-        <div className="flex gap-2 flex-shrink-0">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageUpload}
-            accept="image/*"
-            className="hidden"
+      {/* Input Area - Fixed */}
+      <div className="bg-white border-t border-gray-200 px-6 py-4 flex-shrink-0 space-y-3">
+        {/* Image Preview */}
+        {imagePreview && (
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-3 bg-green-50 p-3 rounded-xl border border-green-200">
+            <div className="relative">
+              <img src={imagePreview} alt="Uploaded leaf" className="h-16 w-16 object-cover rounded-lg" />
+              <button
+                onClick={() => {
+                  setUploadedImage(null);
+                  setImagePreview(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 shadow-lg">
+                ✕
+              </button>
+            </div>
+            <div className="text-xs text-green-700 flex-1">
+              <p className="font-medium">✓ Leaf image ready</p>
+              <p className="text-green-600">Add a message and send to analyze</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Input and buttons */}
+        <div className="bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-[#2E7D32] focus-within:bg-white p-3 flex gap-2 items-end transition-all">
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+            placeholder={language === 'hi' ? 'अपना सवाल यहां लिखें...' : language === 'mr' ? 'तुमचा प्रश्न इथे लिहा...' : 'Ask anything about your crops...'}
+            rows={1}
+            className="flex-1 bg-transparent resize-none focus:outline-none text-sm py-2 font-medium"
+            style={{ maxHeight: '100px', overflowY: 'auto' }}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${uploadedImage ? 'bg-[#2E7D32] text-white' : 'bg-muted text-muted-foreground hover:bg-[#E8F5E9] hover:text-[#2E7D32]'}`}
-            title="Upload leaf image">
-            {uploadedImage ? <ImageIcon className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={isListening ? stopListening : startListening}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-muted text-muted-foreground hover:bg-[#E8F5E9] hover:text-[#2E7D32]'}`}
-            title="Voice input">
-            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={() => sendMessage()}
-            disabled={(!input.trim() && !uploadedImage) || chatMutation.isPending}
-            className="w-9 h-9 bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-50">
-            {chatMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Image Preview */}
-      {imagePreview && (
-        <div className="mt-2 relative w-full">
-          <div className="inline-block rounded-lg overflow-hidden border-2 border-[#2E7D32]">
-            <img src={imagePreview} alt="Uploaded leaf" className="h-32 w-32 object-cover" />
-            <button
-              onClick={() => {
-                setUploadedImage(null);
-                setImagePreview(null);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-              }}
-              className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600">
-              ✕
-            </button>
+          <div className="flex gap-1.5 flex-shrink-0">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              accept="image/*"
+              className="hidden"
+            />
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                uploadedImage 
+                  ? 'bg-green-500 text-white shadow-md' 
+                  : 'bg-gray-200 text-gray-600 hover:bg-[#2E7D32] hover:text-white'
+              }`}
+              title="Upload leaf image">
+              {uploadedImage ? <ImageIcon className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={isListening ? stopListening : startListening}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                isListening 
+                  ? 'bg-red-500 text-white animate-pulse shadow-md' 
+                  : 'bg-gray-200 text-gray-600 hover:bg-blue-500 hover:text-white'
+              }`}
+              title="Voice input">
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => sendMessage()}
+              disabled={(!input.trim() && !uploadedImage) || chatMutation.isPending}
+              className="w-9 h-9 bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md">
+              {chatMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </motion.button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Leaf image ready to analyze</p>
         </div>
-      )}
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        {language === 'hi' ? 'हिन्दी, मराठी, English में बात करें' : language === 'mr' ? 'हिन्दी, मराठी, English मध्ये बोला' : 'Speak in Hindi, Marathi, or English'}
-      </p>
+
+        {/* Helper text */}
+        <p className="text-xs text-gray-500 text-center flex items-center justify-center gap-1">
+          <span className="inline-block">💬</span>
+          {language === 'hi' ? 'हिन्दी, मराठी, English में पूछें' : language === 'mr' ? 'हिन्दी, मराठी, English मध्ये विचारा' : 'Ask in Hindi, Marathi, or English'}
+        </p>
+      </div>
 
       {/* AI Doctor Modal */}
       <AnimatePresence>
